@@ -1,0 +1,50 @@
+{
+  "name": "seo-geo-crawler",
+  "version": "1.0.0",
+  "description": "Rule-based SEO/GEO page audit tool with historical storage and HTML reporting",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "audit": "tsx src/cli/index.ts audit",
+    "migrate": "tsx src/cli/index.ts migrate",
+    "web": "tsx src/cli/index.ts web",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src test",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "cli-progress": "^3.12.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "fast-xml-parser": "^5.7.0",
+    "mysql2": "^3.11.3",
+    "p-limit": "^6.1.0",
+    "playwright": "^1.48.0",
+    "robots-parser": "^3.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cli-progress": "^3.11.6",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.16.10",
+    "@typescript-eslint/eslint-plugin": "^8.8.0",
+    "@typescript-eslint/parser": "^8.8.0",
+    "eslint": "^9.11.1",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "fsevents@2.3.2": true,
+    "fsevents@2.3.3": true
+  }
+}

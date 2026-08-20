@@ -1,0 +1,26 @@
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: seo_geo_crawler_db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpass}
+      MARIADB_DATABASE: ${DB_NAME:-seo_geo_crawler}
+      MARIADB_USER: ${DB_USER:-crawler}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-crawlerpass}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    # No bind-mount of docker/mariadb/init here: Docker's bind-mount API is colon-delimited
+    # at the engine level (`host:container[:mode]`), which breaks for any host path containing
+    # a colon. `npm run migrate` (src/db/migrate.ts) applies docker/mariadb/init/*.sql directly
+    # via Node's fs instead, so it's not needed — see README setup step 4.
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_data:
