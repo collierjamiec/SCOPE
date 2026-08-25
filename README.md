@@ -153,7 +153,7 @@ GA4 reporting periods are read from native `Start date` / `End date` export meta
 
 ## Google Analytics 4 imports
 
-For reliable engagement-rate data, create a GA4 **Explore → Free form** exploration with **Landing page + query string** as the row dimension and Sessions, Active users, Engaged sessions, Engagement rate, and Key events as metrics, then export CSV. The standard Landing page detail report is also accepted, but it may omit Engagement rate. SCOPE now preserves a missing metric as **Unavailable in export** instead of silently converting it to 0.0%. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows.
+For reliable engagement and bounce data, create a GA4 **Explore → Free form** exploration with **Landing page + query string** as the row dimension and Sessions, Active users, Engaged sessions, Engagement rate, Bounce rate, and Key events as metrics, then export CSV. The standard Landing page detail report is also accepted, but it may omit either rate. SCOPE preserves a missing metric as **Unavailable in export** instead of silently converting it to 0.0%. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows.
 
 Use the same GSC and GA4 period when possible. Uploaded CSV contents are processed locally and omitted from persisted audit configuration.
 

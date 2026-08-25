@@ -121,10 +121,10 @@ export function applyGa4Export(pages: PageResult[], csv: string | undefined, ori
     const rawPath = field(row, ['landingpage', 'landingpagequerystring', 'pagepath', 'pagepathquerystring', 'page']); if (!rawPath || rawPath === '(not set)') continue;
     let path: string; try { path = new URL(rawPath, origin).pathname.replace(/\/$/, '') || '/'; } catch { continue; }
     const page = pageMap.get(path); if (!page) continue;
-    const engagementRaw = field(row, ['engagementrate']);
+    const engagementRaw = field(row, ['engagementrate']), bounceRaw = field(row, ['bouncerate']);
     page.analytics = {
       sessions: number(field(row, ['sessions'])), activeUsers: number(field(row, ['activeusers', 'users'])),
-      engagedSessions: number(field(row, ['engagedsessions'])), engagementRate: engagementRaw === '' ? null : number(engagementRaw) / (engagementRaw.includes('%') ? 100 : 1),
+      engagedSessions: number(field(row, ['engagedsessions'])), engagementRate: engagementRaw === '' ? null : number(engagementRaw) / (engagementRaw.includes('%') ? 100 : 1), bounceRate: bounceRaw === '' ? null : number(bounceRaw) / (bounceRaw.includes('%') ? 100 : 1),
       keyEvents: number(field(row, ['keyevents', 'conversions']))
     };
   }

@@ -218,7 +218,7 @@ export interface PageResult {
   findings: Finding[];
   pageSpeed: PageSpeedResult[];
   crawledAt: string;
-  analytics?: { sessions: number; activeUsers: number; engagedSessions: number; engagementRate: number | null; keyEvents: number };
+  analytics?: { sessions: number; activeUsers: number; engagedSessions: number; engagementRate: number | null; bounceRate: number | null; keyEvents: number };
 }
 
 export interface CannibalizationIssue {
