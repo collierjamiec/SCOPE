@@ -28,10 +28,10 @@
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
-    "dashboard": "tsx src/dashboard.ts",
+    "dashboard": "tsx src/bootstrap.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "start": "node dist/cli.js",
-    "start:dashboard": "node dist/dashboard.js",
+    "start:dashboard": "node dist/bootstrap.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy"

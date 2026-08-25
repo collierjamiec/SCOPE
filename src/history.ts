@@ -15,6 +15,16 @@ const db = () => {
   client = new PrismaClient({ adapter: new PrismaMariaDb({ host: connection.hostname, port: Number(connection.port || 3306), user: decodeURIComponent(connection.username), password: decodeURIComponent(connection.password), database: connection.pathname.replace(/^\//, ''), connectionLimit: 8 }) });
   return client;
 };
+export async function historyStatus() {
+  if (!historyEnabled()) return { configured: false, connected: false, initialized: false, state: 'not_configured', message: 'No MariaDB connection is configured.' };
+  if (process.env.SCOPE_HISTORY_BOOTSTRAP_ERROR) return { configured: true, connected: false, initialized: false, state: 'unavailable', message: process.env.SCOPE_HISTORY_BOOTSTRAP_ERROR };
+  try {
+    const runCount = await db().auditRun.count();
+    return { configured: true, connected: true, initialized: true, state: runCount ? 'history_available' : 'awaiting_baseline', runCount, message: runCount ? 'Historical audit data is available.' : 'MariaDB is connected and ready. Complete an audit to create the first historical baseline.' };
+  } catch (error) {
+    return { configured: true, connected: false, initialized: false, state: 'migration_required', message: `MariaDB is reachable, but SCOPE could not read its history schema: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const json = (value: unknown) => JSON.parse(JSON.stringify(value));
 

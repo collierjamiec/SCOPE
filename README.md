@@ -53,14 +53,22 @@ During a crawl, the dashboard shows live activity, fetched/analyzed/queued count
 
 ## Historical trends and MariaDB
 
-SCOPE can retain every completed and intentionally saved partial audit in MariaDB. Audit history is disabled until `DATABASE_URL` is configured; ordinary standalone audits continue to work without a database. Copy `.env.example` to `.env`, replace both example database passwords, start MariaDB with `docker compose up -d mariadb`, then run:
+SCOPE retains every completed and intentionally saved partial audit in MariaDB. The normal dashboard startup is self-initializing: it loads `.env` automatically, uses the local-only bundled MariaDB configuration when `DATABASE_URL` is absent, starts the `mariadb` Docker Compose service when necessary, waits for it to become healthy, and applies pending schema migrations before opening the dashboard. Install and start Docker Desktop once, then use:
+
+```bash
+npm run dashboard
+```
+
+The Trends page reports four distinct states: database unavailable, connected and awaiting its first baseline, baseline available, and comparison history available. A successful audit is retained automatically; the first is the baseline and the next comparable audit for that domain produces deltas.
+
+Advanced or shared installations can copy `.env.example` to `.env` and replace the example database passwords or point `DATABASE_URL` at an existing MariaDB service. Manual database commands remain available for administration:
 
 ```bash
 npm run db:generate
 npm run db:migrate
 ```
 
-For a new local database without migration deployment, `npm run db:push` can synchronize the schema. Production and shared installations should use migrations.
+For a new development database without migration deployment, `npm run db:push` can synchronize the schema. Production and shared installations should use migrations. SCOPE never commits `.env`, database contents, OAuth credentials, or API keys to Git.
 
 The separate `/trends` dashboard provides domain selection, severity and finding-movement charts, structural/search/performance metrics, configuration-comparability warnings, and a retained run table. Historical endpoints are versioned under `/api/v1/trends`. The browser dashboard remains bound to `127.0.0.1`; a future remotely exposed API should add authenticated, domain-scoped API keys before changing that binding.
 

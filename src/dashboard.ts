@@ -11,7 +11,7 @@ import { convertDocxToPdf } from './pdf.js';
 import { loadPageSpeedApiKey, removePageSpeedApiKey, savePageSpeedApiKey } from './pagespeed.js';
 import { createGoogleAuthorization, exchangeGoogleCode, fetchSearchConsoleQueryPages, listSearchConsoleSites, loadGoogleCredentials, removeGoogleCredentials, saveGoogleCredentials } from './google-search-console.js';
 import type { AuditConfig, AuditReport } from './types.js';
-import { deleteDomainHistory, deleteRunHistory, getDomainTrend, historyEnabled, listTrendDomains, mergeDomains, persistAuditRun } from './history.js';
+import { deleteDomainHistory, deleteRunHistory, getDomainTrend, historyEnabled, historyStatus, listTrendDomains, mergeDomains, persistAuditRun } from './history.js';
 import { trendsHtml } from './trends-dashboard.js';
 
 try { process.loadEnvFile(); } catch { /* Environment variables may be supplied by the host. */ }
@@ -140,9 +140,10 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
     if (request.method === 'GET' && url.pathname === '/') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return response.end(servedHtml); }
     if (request.method === 'GET' && url.pathname === '/trends') { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return response.end(trendsHtml); }
-    if (request.method === 'GET' && url.pathname === '/api/v1/trends/status') return json(response, 200, { enabled: historyEnabled() });
+    if (request.method === 'GET' && url.pathname === '/api/v1/trends/status') return json(response, 200, await historyStatus());
     if (request.method === 'GET' && url.pathname === '/api/v1/trends/domains') {
-      if (!historyEnabled()) return json(response, 503, { error: 'Set DATABASE_URL and run npm run db:push to enable MariaDB-backed audit history.' });
+      const status = await historyStatus();
+      if (!status.initialized) return json(response, 503, { error: status.message, status });
       return json(response, 200, await listTrendDomains());
     }
     const trendDomainMatch = url.pathname.match(/^\/api\/v1\/trends\/domains\/([^/]+)$/);
