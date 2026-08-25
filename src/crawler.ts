@@ -99,8 +99,13 @@ async function fetchWithRedirects(url: string, userAgent: string, accept = 'text
     if (response.status < 300 || response.status >= 400) return { response, finalUrl: current, redirectChain: chain.length > 1 ? chain : [], responseTimeMs: Date.now() - startedAt };
     const location = response.headers.get('location');
     if (!location) return { response, finalUrl: current, redirectChain: chain.length > 1 ? chain : [], responseTimeMs: Date.now() - startedAt };
-    const next = normaliseUrl(location, current);
-    if (!next) throw new Error(`Invalid redirect target from ${current}`);
+    let next: string;
+    try {
+      const target = new URL(location, current);
+      if (!['http:', 'https:'].includes(target.protocol)) throw new Error('Unsupported redirect protocol');
+      target.hash = '';
+      next = target.href;
+    } catch { throw new Error(`Invalid redirect target from ${current}`); }
     if (chain.includes(next)) throw new Error(`Redirect loop detected: ${[...chain, next].join(' → ')}`);
     chain.push(next);
     current = next;

@@ -42,9 +42,10 @@ test('crawl respects robots and excludes noindex pages from analysis', async (co
       return response.end(`<urlset><url><loc>http://127.0.0.1:${(server.address() as any).port}/allowed</loc></url><url><loc>http://127.0.0.1:${(server.address() as any).port}/hidden</loc></url><url><loc>http://127.0.0.1:${(server.address() as any).port}/old</loc></url></urlset>`);
     }
     if (request.url === '/old') { response.statusCode = 301; response.setHeader('location', '/allowed'); return response.end(); }
+    if (request.url === '/allowed') { response.statusCode = 301; response.setHeader('location', '/allowed/'); return response.end(); }
     response.setHeader('content-type', 'text/html');
     if (request.url === '/') return response.end('<title>Website Audit Software</title><meta name="description" content="Website audit software for technical SEO teams."><h1>Website Audit Software</h1><a href="/allowed">Allowed</a><a href="/blocked">Blocked</a><a href="/hidden">Hidden</a><a href="/missing">Missing page</a><a href="/blog/article">Blog article</a>');
-    if (request.url === '/allowed') return response.end('<title>Technical SEO Audit</title><h1>Technical SEO Audit</h1>');
+    if (request.url === '/allowed/') return response.end('<title>Technical SEO Audit</title><h1>Technical SEO Audit</h1>');
     if (request.url === '/hidden') return response.end('<meta name="robots" content="noindex"><title>Hidden</title><h1>Hidden</h1>');
     response.statusCode = 404; response.end('missing');
   });
@@ -64,8 +65,8 @@ test('crawl respects robots and excludes noindex pages from analysis', async (co
   assert.ok(report.keywords.every(keyword => keyword.pages.every(page => !page.url.endsWith('/hidden'))));
   assert.equal(report.sitemaps[0].type, 'urlset');
   assert.equal(report.summary.sitemapPageUrls, 3);
-  assert.equal(report.redirects.length, 1);
-  assert.deepEqual(report.redirects[0].chain.map(url => new URL(url).pathname), ['/old', '/allowed']);
+  assert.equal(report.redirects.length, 2);
+  assert.ok(report.redirects.some(redirect => redirect.chain.some(url => new URL(url).pathname === '/allowed/')));
   assert.equal(report.pages.find(page => page.url.endsWith('/'))?.internalLinkCount, 5);
   assert.ok(report.excludedPages.some(page => page.url.includes('/blog/article') && page.reason.includes('configuration')));
   assert.ok(report.brokenLinks.some(link => link.destination.endsWith('/missing') && link.sourcePage.endsWith('/') && link.anchorText === 'Missing page' && link.status === 404));
