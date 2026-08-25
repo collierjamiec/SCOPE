@@ -3,6 +3,8 @@ export interface AuditConfig {
   /** null means crawl every discoverable, allowed same-host HTML URL. */
   maxPages: number | null;
   maxKeywords: number;
+  /** Licensed SERP checks stay separately bounded even when discovery returns thousands of keywords. */
+  maxRankings?: number;
   concurrency: number;
   delayMs: number;
   userAgent: string;
@@ -15,6 +17,9 @@ export interface AuditConfig {
   analyzeImages?: boolean;
   reportBrokenLinks?: boolean;
   analyzeSchema?: boolean;
+  /** Raw exports are consumed locally and omitted from the persisted report config. */
+  gscCsv?: string;
+  ga4Csv?: string;
 }
 
 export interface ImageAnalysisConfig {
@@ -104,6 +109,7 @@ export interface KeywordCandidate {
   confidence: number;
   pages: Array<{ url: string; score: number; evidence: string[] }>;
   ranking: RankingResult | null;
+  searchConsole?: { clicks: number; impressions: number; ctr: number; position: number; pages: string[] };
 }
 
 export interface RankingResult {
@@ -161,6 +167,7 @@ export interface PageResult {
   findings: Finding[];
   pageSpeed: PageSpeedResult[];
   crawledAt: string;
+  analytics?: { sessions: number; activeUsers: number; engagedSessions: number; engagementRate: number; keyEvents: number };
 }
 
 export interface CannibalizationIssue {
@@ -172,7 +179,7 @@ export interface CannibalizationIssue {
 
 export interface AuditReport {
   domain: string;
-  config: Omit<AuditConfig, "pageSpeedApiKey" | "serp" | "imageAnalysis"> & { serpConfigured: boolean; imageAnalysisConfigured: boolean };
+  config: Omit<AuditConfig, "pageSpeedApiKey" | "serp" | "imageAnalysis" | "gscCsv" | "ga4Csv"> & { serpConfigured: boolean; imageAnalysisConfigured: boolean };
   summary: {
     pagesFetched: number;
     indexablePagesAnalyzed: number;
@@ -189,6 +196,7 @@ export interface AuditReport {
   keywords: KeywordCandidate[];
   cannibalization: CannibalizationIssue[];
   aiCrawlerAccess: Array<{ crawler: string; allowed: boolean; note: string }>;
+  importedData: { gscRows: number; ga4Rows: number };
   generatedAt: string;
 }
 

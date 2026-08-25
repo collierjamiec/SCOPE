@@ -209,6 +209,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
       [1900, 1800, 1700, 1700, 2260]
     ),
     body('This report separates observed crawl evidence from inferred keyword relevance. When no SERP provider is configured, keyword positions remain unavailable and cannibalization flags indicate overlapping on-page targeting rather than proven ranking overlap.'),
+    body(`Imported data: ${report.importedData.gscRows} GSC row(s) and ${report.importedData.ga4Rows} GA4 row(s). CSV exports are processed locally and are not retained in the report configuration.`),
     heading('AI answer readiness', 1),
     body(`Average readiness score: ${averageAio}/100 across ${aioPages.length} analyzed pages. This measures technical and content readiness—not verified inclusion, ranking, or citation in an AI answer.`),
     dataTable(

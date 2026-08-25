@@ -41,7 +41,7 @@ npm run dashboard
 
 Open the displayed local URL, enter any starting page, and watch live robots, sitemap, crawl, PageSpeed, and keyword-analysis progress. Results appear in searchable browser-friendly tables, with DOCX and PDF downloads when LibreOffice is available.
 
-Use the orange gear to open compact accordion settings for crawl scope, keyword analysis, and audit modules. Choose a **Quick scan**, **SEO audit**, **SEO + AIO**, **Full audit**, or customize the page limit, crawl pace, exclusions, keyword count, SERP locale, PageSpeed, image, broken-link, and schema analysis. **Select full audit** enables every module, clears exclusions, and selects the entire eligible site.
+Use the orange gear to open compact accordion settings for crawl scope, keyword analysis, audit modules, and connected data. Choose a **Quick scan**, **SEO audit**, **SEO + AIO**, **Full audit**, or customize the page limit, crawl pace, exclusions, discovery of up to 5,000 keywords, up to 100 licensed SERP checks, PageSpeed, image, broken-link, and schema analysis. GSC and GA4 CSV exports can be imported locally without sharing Google credentials; GSC query metrics enrich keyword findings and GA4 landing-page metrics enrich matching page records.
 
 The default copyright owner and creator credit are **Jamie C. Collier** and can be overridden with `SCOPE_COPYRIGHT_OWNER` and `SCOPE_CREATOR_NAME`.
 

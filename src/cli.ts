@@ -19,7 +19,8 @@ async function main() {
 
 Options:
   --max-pages N       Optional page limit; omitted or "all" crawls the whole site
-  --max-keywords N    Domain keyword candidates, default 100, maximum 100
+  --max-keywords N    Domain keyword candidates, default 100, maximum 5000
+  --max-rankings N    Licensed SERP checks, default 100, maximum 100
   --exclude PATHS     Comma-separated path prefixes to omit, e.g. /blog,/careers
   --out DIRECTORY     Output directory, default ./audit-output
   --pagespeed         Request mobile PageSpeed Insights data
@@ -53,7 +54,7 @@ SERP_API_KEY. The endpoint adapter contract is documented in README.md.`);
   const maxPagesOption = option('max-pages');
   const excludePaths = (option('exclude') ?? '').split(',').map(value => value.trim()).filter(Boolean);
   const config: AuditConfig = {
-    startUrl, maxPages: !maxPagesOption || maxPagesOption.toLowerCase() === 'all' ? null : Number(maxPagesOption), maxKeywords: Number(option('max-keywords') ?? 100),
+    startUrl, maxPages: !maxPagesOption || maxPagesOption.toLowerCase() === 'all' ? null : Number(maxPagesOption), maxKeywords: Number(option('max-keywords') ?? 100), maxRankings: Number(option('max-rankings') ?? 100),
     concurrency: 1, delayMs: Number(option('delay-ms') ?? 250), userAgent: 'OrganicSiteAuditor/0.1 (+respectful SEO audit)',
     pageSpeed: flag('pagespeed'), pageSpeedApiKey: process.env.PAGESPEED_API_KEY, serp,
     imageAnalysis: process.env.IMAGE_ANALYSIS_ENDPOINT && process.env.IMAGE_ANALYSIS_API_KEY ? { endpoint: process.env.IMAGE_ANALYSIS_ENDPOINT, apiKey: process.env.IMAGE_ANALYSIS_API_KEY } : undefined,

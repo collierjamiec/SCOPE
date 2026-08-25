@@ -8,6 +8,10 @@ test('accepts an unlimited crawl configuration', () => {
   assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
 });
 
+test('accepts thousands of discovered keywords while limiting ranking checks', () => {
+  assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 5000, maxRankings: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
+});
+
 test('path exclusions match a section and its descendants without matching similar slugs', () => {
   assert.equal(isExcludedUrl('https://example.test/blog', ['/blog']), true);
   assert.equal(isExcludedUrl('https://example.test/blog/article', ['/blog']), true);

@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import type { AuditConfig, AuditReport, PageResult, SitemapResult } from './types.js';
 import { extractPage } from './extract.js';
 import { aggregateKeywords, applyRankings, detectCannibalization } from './keywords.js';
+import { applyGa4Export, mergeGscExport } from './imports.js';
 import { fetchPageSpeed } from './pagespeed.js';
 import { getRankings, HttpSerpProvider } from './serp.js';
 import { enrichImageRecommendations } from './image-analysis.js';
@@ -44,7 +45,8 @@ export function validateConfig(config: AuditConfig): void {
   const url = new URL(config.startUrl);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Start URL must use HTTP or HTTPS.');
   if (config.maxPages !== null && (!Number.isInteger(config.maxPages) || config.maxPages < 1)) throw new Error('maxPages must be null (unlimited) or a positive integer.');
-  if (!Number.isInteger(config.maxKeywords) || config.maxKeywords < 1 || config.maxKeywords > 100) throw new Error('maxKeywords must be an integer between 1 and 100.');
+  if (!Number.isInteger(config.maxKeywords) || config.maxKeywords < 1 || config.maxKeywords > 5000) throw new Error('maxKeywords must be an integer between 1 and 5000.');
+  if (config.maxRankings !== undefined && (!Number.isInteger(config.maxRankings) || config.maxRankings < 0 || config.maxRankings > 100)) throw new Error('maxRankings must be an integer between 0 and 100.');
 }
 
 async function loadRobots(origin: string, userAgent: string) {
@@ -187,7 +189,10 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   }
   await onProgress({ phase: 'keywords', message: 'Scoring keyword targets and checking cannibalization', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98 });
   const keywords = aggregateKeywords(pages, input.maxKeywords);
-  if (input.serp) applyRankings(keywords, await getRankings(new HttpSerpProvider(input.serp), keywords, new URL(startUrl).hostname));
+  const gscRows = mergeGscExport(keywords, input.gscCsv, input.maxKeywords, startUrl);
+  const ga4Rows = applyGa4Export(pages, input.ga4Csv, startUrl);
+  const rankingCandidates = keywords.slice(0, input.maxRankings ?? 100);
+  if (input.serp && rankingCandidates.length) applyRankings(rankingCandidates, await getRankings(new HttpSerpProvider(input.serp), rankingCandidates, new URL(startUrl).hostname));
   const cannibalization = detectCannibalization(keywords);
   for (const redirect of redirects) redirect.sourcePages = pages.filter(page => page.links.some(link => link.url === redirect.source)).map(page => page.url);
   const failures = new Map(excluded.filter(item => item.status && item.status >= 400).map(item => [item.url, item]));
@@ -202,14 +207,14 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const report: AuditReport = {
     domain: new URL(startUrl).hostname,
     config: {
-      startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords,
+      startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords, maxRankings: input.maxRankings ?? 100,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
       pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,
     redirects, brokenLinks,
-    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, generatedAt: new Date().toISOString()
+    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows }, generatedAt: new Date().toISOString()
   };
   await onProgress({ phase: 'complete', message: 'Audit complete', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 100 });
   return report;
