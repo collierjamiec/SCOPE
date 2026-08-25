@@ -231,7 +231,7 @@ export interface AuditReport {
   keywords: KeywordCandidate[];
   cannibalization: CannibalizationIssue[];
   aiCrawlerAccess: Array<{ crawler: string; allowed: boolean; note: string }>;
-  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number };
+  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number; gscDateRange?: { start: string; end: string; source: 'Dates export' } };
   priorities: Array<{ rank: number; area: string; issue: string; impact: 'high' | 'medium' | 'low'; effort: 'low' | 'medium' | 'high'; affectedPages: number; affectedUrls: string[]; recommendation: string }>;
   generatedAt: string;
   partial?: boolean;

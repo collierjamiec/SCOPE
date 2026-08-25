@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyGa4Export, mergeGscExport } from '../src/imports.js';
+import { applyGa4Export, detectGscDateRange, mergeGscExport } from '../src/imports.js';
 import type { PageResult } from '../src/types.js';
 
 test('merges Search Console exports into keyword candidates', () => {
@@ -10,6 +10,17 @@ test('merges Search Console exports into keyword candidates', () => {
   assert.equal(keywords[0].keyword, 'seo audit');
   assert.equal(keywords[0].searchConsole.clicks, 12);
   assert.equal(keywords[0].searchConsole.ctr, 0.1);
+});
+
+test('GSC queries are imported even when inferred keywords already fill the limit', () => {
+  const keywords: any[] = [{ keyword: 'inferred phrase', score: 10, confidence: .8, pages: [], ranking: null }];
+  mergeGscExport(keywords, 'Query,Clicks,Impressions,CTR,Position\nobserved query,5,50,10%,3.2\n', 1, 'https://example.com');
+  assert.ok(keywords.some(keyword => keyword.keyword === 'observed query' && keyword.searchConsole));
+});
+
+test('derives the GSC reporting period from a Dates export', () => {
+  const range = detectGscDateRange(['Date,Clicks,Impressions,CTR,Position\n2026-06-30,1,10,10%,4\n2026-06-01,2,20,10%,5\n']);
+  assert.deepEqual(range, { start: '2026-06-01', end: '2026-06-30', source: 'Dates export' });
 });
 
 test('attaches GA4 landing-page metrics to matching pages', () => {

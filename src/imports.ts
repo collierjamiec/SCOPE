@@ -19,7 +19,7 @@ function parseCsv(input: string): Row[] {
   const normalize = (header: string) => header.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
   const headerIndex = table.findIndex(candidate => {
     const cells = candidate.map(normalize);
-    const dimension = cells.some(cell => ['query', 'queries', 'topqueries', 'page', 'pages', 'toppages', 'landingpage', 'landingpagequerystring', 'pagepath', 'pagepathquerystring'].includes(cell));
+    const dimension = cells.some(cell => ['query', 'queries', 'topqueries', 'page', 'pages', 'toppages', 'landingpage', 'landingpagequerystring', 'pagepath', 'pagepathquerystring', 'date'].includes(cell));
     const metric = cells.some(cell => ['clicks', 'impressions', 'sessions', 'activeusers', 'engagedsessions', 'engagementrate'].includes(cell));
     return dimension && metric;
   });
@@ -42,7 +42,7 @@ export function mergeGscExport(keywords: KeywordCandidate[], csv: string | undef
     const ctrRaw = number(field(row, ['ctr'])); const ctr = field(row, ['ctr']).includes('%') ? ctrRaw / 100 : ctrRaw;
     const position = number(field(row, ['position', 'averageposition']));
     let keyword = byKeyword.get(phrase.toLowerCase());
-    if (!keyword && byKeyword.size < maximum) {
+    if (!keyword) {
       keyword = { keyword: phrase, score: 0, confidence: 1, pages: page ? [{ url: page, score: 0, evidence: ['Google Search Console export'] }] : [], ranking: null };
       keywords.push(keyword); byKeyword.set(phrase.toLowerCase(), keyword);
     }
@@ -55,6 +55,16 @@ export function mergeGscExport(keywords: KeywordCandidate[], csv: string | undef
     keyword.searchConsole = existing;
   }
   return rows.length;
+}
+
+export function detectGscDateRange(csvFiles: Array<string | undefined>): { start: string; end: string; source: 'Dates export' } | undefined {
+  const dates = csvFiles.flatMap(csv => csv?.trim() ? parseCsv(csv).map(row => field(row, ['date'])).filter(Boolean) : [])
+    .map(value => new Date(value))
+    .filter(date => !Number.isNaN(date.valueOf()))
+    .sort((a, b) => a.valueOf() - b.valueOf());
+  if (!dates.length) return undefined;
+  const iso = (date: Date) => date.toISOString().slice(0, 10);
+  return { start: iso(dates[0]), end: iso(dates[dates.length - 1]), source: 'Dates export' };
 }
 
 export function applyGa4Export(pages: PageResult[], csv: string | undefined, origin: string): number {
