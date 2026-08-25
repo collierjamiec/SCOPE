@@ -1,76 +1,118 @@
-# SEO/GEO Page Audit Tool (v1)
+# Organic Site Auditor
 
-Rule-based structural SEO and GEO (generative engine optimization) audits for a single URL,
-stored over time in MariaDB and rendered as self-contained HTML reports.
+Copyright © 2026 Jamie C. Collier. All rights reserved.
 
-## Pipeline
+A respectful, robots-aware website crawler for page metadata, keyword targeting, cannibalization signals, JSON-LD, CTA detection, PageSpeed, and SEO/GEO/AIO checks.
 
-```
-Fetch & Render  ->  Extract  ->  Check  ->  Store  ->  Report
-(Playwright,        (all raw   (rule-    (MariaDB)   (read-only,
- throttled mobile)   data)      based       always re-queries
-                                 findings)   storage)
-```
+SCOPE means **Search & Content Optimization Performance Engine**. It distinguishes **AI Answer Readiness**, which can be measured from crawl evidence, from **AI visibility**, which requires platform citation, referral, or licensed monitoring data.
 
-Every stage is a plain `Stage<TIn, TOut>` (see [src/pipeline/types.ts](src/pipeline/types.ts)),
-composed by function call in [src/cli/commands/audit.ts](src/cli/commands/audit.ts) — a future
-stage (e.g. a v2 LLM review pass) can be inserted without touching existing stages.
+## Behavior and crawl scope
 
-## Setup
+- Crawls every discoverable, allowed same-host HTML page by default. Use `--max-pages N` when you want a bounded sample.
+- Produces at most 100 domain-level keyword candidates.
+- Checks `robots.txt` before every page fetch.
+- Excludes non-HTML, non-2xx, and `noindex` pages from page analysis, keyword aggregation, PageSpeed, and cannibalization detection.
+- Crawls only the starting hostname and strips common tracking parameters.
+- Records meta-description text and Unicode character count.
+- Inventories robots-declared and conventional sitemaps, including sitemap type, status, entries, child sitemap count, and unique same-domain page URLs.
+- Records redirect chains and final status without double-counting an already analyzed destination.
+- Reports each page's HTTP status plus unique internal and external link counts.
+- Flags missing alt text and generic/unoptimized image filenames, then recommends an SEO-friendly filename and concise alt text using the page's subject and keyword targets.
+- Scores AI answer readiness across crawler/snippet accessibility (20), answer extractability (20), evidence and citation readiness (20), entity clarity (15), intent coverage (15), freshness (5), and multimodal accessibility (5).
+- Checks robots access for OAI-SearchBot, Googlebot, and Bingbot; detects restrictive snippet controls; inventories question-led headings, answer passages, structured formats, authorship, dates, source links, and semantic/schema signals.
+- When `IMAGE_ANALYSIS_ENDPOINT` and `IMAGE_ANALYSIS_API_KEY` are configured, the image adapter can inspect image content and return stronger visual recommendations. Without it, recommendations are explicitly labeled as page-context inferences.
+- Rankings are `null` unless a licensed SERP provider is configured. The tool never treats inferred keywords as proven rankings.
+- Cannibalization is a warning based on overlapping on-page targeting. Without SERP or Search Console data it cannot prove that two pages rank for the same query.
 
-1. Install dependencies:
-   ```bash
-   npm install
-   npx playwright install chromium
-   ```
-2. Copy `.env.example` to `.env` and adjust if needed.
-3. Start MariaDB:
-   ```bash
-   docker-compose up -d
-   ```
-4. Apply the schema:
-   ```bash
-   npm run migrate
-   ```
-
-## Usage
-
-Run an audit against a URL — this writes to the database and renders an HTML report:
+## Install and run
 
 ```bash
-npm run audit -- --url https://example.com
-npm run audit -- --url https://example.com --report-out ./my-report.html
+npm install
+npm run dev -- --url https://example.com
 ```
 
-Progress (current step + percentage) prints live to the terminal as the audit runs.
-The report defaults to `reports/crawl-<id>.html` and can be opened directly in a browser.
-
-Browse stored history in the local web viewer:
+Or launch the browser dashboard:
 
 ```bash
-npm run web
+npm run dashboard
 ```
 
-Then open `http://localhost:4000` — project list → project rollup → page trend → single
-crawl report.
+Open the displayed local URL, enter any starting page, and watch live robots, sitemap, crawl, PageSpeed, and keyword-analysis progress. Results appear in searchable browser-friendly tables, with DOCX and PDF downloads when LibreOffice is available.
 
-## Extending checks
+The default copyright owner and creator credit are **Jamie C. Collier** and can be overridden with `SCOPE_COPYRIGHT_OWNER` and `SCOPE_CREATOR_NAME`.
 
-Add a new file under `src/pipeline/check/checks/` exporting a `CheckDefinition`, then add it
-to the array in [src/pipeline/check/registry.ts](src/pipeline/check/registry.ts). No other
-file needs to change. Expected schema.org types live as plain data in
-[src/config/schemaChecklist.ts](src/config/schemaChecklist.ts); all tunable thresholds (speed
-budget, title/meta length ranges, generic alt-text/anchor-text lists, throttle settings) live
-in [src/config/thresholds.ts](src/config/thresholds.ts).
+To enable **Email PDF**, copy `.env.example` to `.env` and replace `re_xxxxxxxxx` with your real Resend API key:
 
-## Tests
+```dotenv
+RESEND_API_KEY=re_xxxxxxxxx
+RESEND_FROM=SCOPE <onboarding@resend.dev>
+RESEND_REPLY_TO=jamie@phoenixrisingseo.com
+```
+
+Never commit `.env`. The test sender is useful during setup; configure `RESEND_FROM` with a sender on your verified domain before emailing arbitrary recipients in production.
+
+Useful options:
 
 ```bash
-npm test
+npm run dev -- --url https://example.com --max-pages 500 --max-keywords 100 --pagespeed --out audit-output
 ```
 
-## Roadmap
+The output root contains one folder per domain. Each domain folder contains:
 
-- **v2** — LLM judgment layer over the same extracted data (deferred, needs API budget)
-- **v3** — full-site crawler reusing this per-URL pipeline
-- **v4** — Google Search Console / Analytics data layered onto the rollup/trend views
+- `SCOPE-Audit-MM-DD-YYYY.docx` — a formatted document containing all findings
+- `report.json` — complete machine-readable audit data
+- `pages.csv` — page-level metadata and findings
+- `keywords.csv` — keyword targeting, rankings, and competing pages
+- `links.csv` — every discovered internal and external link with source page, anchor text, and destination
+- `images.csv` — every flagged image with its issue, recommendation basis, suggested filename, and suggested alt text
+
+For example: `audit-output/example.com/SCOPE-Audit-08-24-2026.docx`.
+
+PageSpeed is off by default because it can be slow and quota-limited. Set `PAGESPEED_API_KEY` and add `--pagespeed` to enable mobile tests.
+
+### Optional image-analysis adapter
+
+Set `IMAGE_ANALYSIS_ENDPOINT` and `IMAGE_ANALYSIS_API_KEY` to enable visual inspection. The endpoint receives a POST body containing `imageUrl`, `pageUrl`, `pageTitle`, `primaryKeywords`, and `currentAlt`, and may return:
+
+```json
+{
+  "description": "A receptionist answering a business call at a desk",
+  "suggestedAlt": "Virtual receptionist answering a customer call",
+  "suggestedFilename": "virtual-receptionist-answering-customer-call.webp"
+}
+```
+
+## Optional licensed SERP integration
+
+An interactive run asks whether you have a licensed SERP API. For automation, set:
+
+```bash
+SERP_ENDPOINT=https://your-adapter.example/rank \
+SERP_API_KEY=secret \
+npm run dev -- --url https://example.com --non-interactive
+```
+
+The endpoint receives an authenticated `POST` request:
+
+```json
+{
+  "keyword": "enterprise website crawler",
+  "domain": "example.com",
+  "country": "us",
+  "language": "en",
+  "device": "desktop",
+  "organicOnly": true
+}
+```
+
+It must return:
+
+```json
+{ "position": 8, "rankingUrl": "https://example.com/crawler" }
+```
+
+This small adapter keeps vendor-specific credentials and response formats outside the crawler. Failed lookups remain unavailable rather than being guessed.
+
+## Important interpretation notes
+
+Keyword candidates are inferred from titles, descriptions, headings, and visible content. Rankings require a provider. CTA selection and cannibalization are confidence-based signals and should be reviewed. GEO/AIO findings are content-readiness heuristics, not promises of inclusion in an AI-generated answer.

@@ -1,0 +1,170 @@
+import * as cheerio from 'cheerio';
+import type { CtaInfo, Finding, Heading, ImageRecommendation, LinkInfo, PageResult, SchemaMarkup, SuggestedSchema } from './types.js';
+import { cleanText, normaliseUrl, sameHost } from './util.js';
+import { extractKeywordSignals } from './keywords.js';
+import { assessAio } from './aio.js';
+
+function schemaTypes(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return [];
+  if (Array.isArray(value)) return [...new Set(value.flatMap(schemaTypes))];
+  const record = value as Record<string, unknown>;
+  const own = typeof record['@type'] === 'string' ? [record['@type']] : Array.isArray(record['@type']) ? record['@type'].filter((v): v is string => typeof v === 'string') : [];
+  return [...new Set([...own, ...schemaTypes(record['@graph'])])];
+}
+
+export function suggestSchemas(page: Pick<PageResult, 'url'|'title'|'h1s'|'h2s'|'text'|'schemas'>): SuggestedSchema[] {
+  const existing = new Set(page.schemas.flatMap(schema => schema.types).map(type => type.toLowerCase()));
+  const content = `${page.title} ${page.h1s.join(' ')} ${page.h2s.join(' ')} ${page.text.slice(0, 12000)}`.toLowerCase();
+  const path = new URL(page.url).pathname;
+  const suggestions: SuggestedSchema[] = [];
+  const add = (type: string, reason: string, confidence: SuggestedSchema['confidence']) => {
+    if (!existing.has(type.toLowerCase()) && !suggestions.some(item => item.type === type)) suggestions.push({ type, reason, confidence });
+  };
+  if (path.split('/').filter(Boolean).length > 1) add('BreadcrumbList', 'The page is nested deeply enough that breadcrumb context could clarify its place in the site hierarchy.', 'high');
+  if (/\bfaq(s)?\b|frequently asked questions|questions and answers/.test(content)) add('FAQPage', 'The visible content appears to contain a question-and-answer section; only use this when the full questions and answers are visible.', 'high');
+  if (/\btestimonial(s)?\b|customer reviews?|what (our )?customers say/.test(content)) add('Review', 'Visible testimonial or review content may support Review markup when each review identifies its subject and author.', 'medium');
+  if (/\b[1-5](?:\.\d)?\s*(?:\/\s*5|stars?)\b|aggregate rating|rated [1-5]/.test(content)) add('AggregateRating', 'A visible rating signal was detected; use only when the aggregate value and review count are shown to users and meet Google policies.', 'medium');
+  if (/\bhow to\b|step-by-step|\bstep 1\b/.test(content)) add('HowTo', 'The page appears to present a step-based process.', 'medium');
+  if (/\b(blog|article|guide|news|resources?)\b/.test(`${path} ${content.slice(0, 1000)}`)) add('Article', 'The page appears editorial or educational and may benefit from author, publisher, and date properties.', 'medium');
+  else if (/\b(service|solutions?|answering service|receptionist|consultation)\b/.test(content)) add('Service', 'The page appears to describe a service offering and its audience or provider.', 'medium');
+  if (path === '/' || path === '') add('Organization', 'The homepage can identify the organization, logo, URL, and authoritative sameAs profiles.', 'high');
+  add('WebPage', 'Base WebPage markup can identify the page name, canonical URL, description, and relationship to the site.', 'medium');
+  return suggestions;
+}
+
+function findCta($: cheerio.CheerioAPI, baseUrl: string): CtaInfo | null {
+  const candidates: Array<CtaInfo & { score: number }> = [];
+  $('a[href], button').each((_, node) => {
+    const el = $(node);
+    const text = cleanText(el.text() || el.attr('aria-label'));
+    const href = el.attr('href');
+    if (!text || !href || el.attr('aria-hidden') === 'true') return;
+    const url = normaliseUrl(href, baseUrl);
+    if (!url) return;
+    const action = /\b(get|start|try|buy|shop|book|schedule|contact|request|download|subscribe|sign up|learn more|demo|quote)\b/i.test(text);
+    const cls = `${el.attr('class') ?? ''} ${el.attr('role') ?? ''}`;
+    const styled = /(btn|button|cta|primary)/i.test(cls);
+    const inHeader = el.closest('header,nav').length > 0;
+    const inFooter = el.closest('footer').length > 0;
+    const inHero = el.closest('[class*=hero],[id*=hero]').length > 0;
+    const evidence: string[] = [];
+    let score = 0;
+    if (action) { score += 4; evidence.push('action-oriented wording'); }
+    if (styled) { score += 3; evidence.push('button/CTA styling'); }
+    if (inHero) { score += 3; evidence.push('located in hero'); }
+    if (inHeader) { score += 1; evidence.push('located in header/navigation'); }
+    if (inFooter) score -= 2;
+    const location = inHero ? 'hero' : inHeader ? 'header' : inFooter ? 'footer' : el.closest('main').length ? 'main' : 'unknown';
+    candidates.push({ text, url, internal: sameHost(url, baseUrl), location, confidence: 0, evidence, score });
+  });
+  const best = candidates.sort((a, b) => b.score - a.score)[0];
+  if (!best || best.score < 2) return null;
+  const { score, ...cta } = best;
+  cta.confidence = Math.min(0.98, 0.35 + score * 0.075);
+  return cta;
+}
+
+function findingsFor(page: Pick<PageResult, 'title'|'metaDescription'|'metaDescriptionCharacters'|'h1s'|'h2s'|'schemas'|'wordCount'|'canonical'>): Finding[] {
+  const out: Finding[] = [];
+  if (!page.title) out.push({ category: 'seo', severity: 'critical', rule: 'title_missing', message: 'SEO title is missing.' });
+  if (!page.metaDescription) out.push({ category: 'seo', severity: 'warning', rule: 'meta_description_missing', message: 'Meta description is missing.' });
+  else if (page.metaDescriptionCharacters < 70 || page.metaDescriptionCharacters > 170) out.push({ category: 'seo', severity: 'warning', rule: 'meta_description_length', message: `Meta description has ${page.metaDescriptionCharacters} characters; review its SERP presentation.`, evidence: page.metaDescription });
+  if (page.h1s.length === 0) out.push({ category: 'seo', severity: 'warning', rule: 'h1_missing', message: 'No H1 was found.' });
+  if (page.h1s.length > 1) out.push({ category: 'seo', severity: 'info', rule: 'multiple_h1', message: `${page.h1s.length} H1 elements were found.` });
+  if (!page.canonical) out.push({ category: 'seo', severity: 'info', rule: 'canonical_missing', message: 'No canonical link was found.' });
+  if (page.wordCount < 150) out.push({ category: 'geo', severity: 'warning', rule: 'thin_content', message: `Only ${page.wordCount} visible words were extracted.` });
+  if (page.h2s.length === 0) out.push({ category: 'aio', severity: 'info', rule: 'answer_structure', message: 'No H2 sections were found; clear topical sections may improve extractability.' });
+  if (page.schemas.length === 0) out.push({ category: 'geo', severity: 'info', rule: 'schema_missing', message: 'No JSON-LD markup was found.' });
+  if (page.schemas.some(s => !s.validJson)) out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: 'At least one JSON-LD block is invalid JSON.' });
+  return out;
+}
+
+export function extractPage(requestedUrl: string, finalUrl: string, status: number, contentType: string, html: string, headers: Headers, redirectChain: string[] = [], responseTimeMs: number | null = null): PageResult {
+  const $ = cheerio.load(html);
+  const imageCount = $('img').length;
+  const imagesMissingAltText = $('img').filter((_, image) => !cleanText($(image).attr('alt'))).length;
+  const htmlLang = cleanText($('html').attr('lang')) || null;
+  const hasViewportMeta = $('meta[name="viewport" i]').length > 0;
+  const hasAuthor = $('meta[name="author" i],[rel="author"],.author,[itemprop="author"]').length > 0;
+  const hasPublishedDate = $('time[datetime],meta[property="article:published_time" i],[itemprop="datePublished"]').length > 0;
+  const hasModifiedDate = $('meta[property="article:modified_time" i],[itemprop="dateModified"]').length > 0;
+  const listCount = $('main ol,main ul,article ol,article ul').length;
+  const tableCount = $('main table,article table').length;
+  $('script:not([type="application/ld+json"]),style,noscript,svg,template').remove();
+  const title = cleanText($('title').first().text());
+  const metaDescription = cleanText($('meta[name="description" i]').first().attr('content'));
+  const canonicalRaw = $('link[rel="canonical" i]').first().attr('href');
+  const canonical = canonicalRaw ? normaliseUrl(canonicalRaw, finalUrl) : null;
+  const headerRobots = headers.get('x-robots-tag') ?? '';
+  const metaRobots = $('meta[name="robots" i],meta[name="googlebot" i]').map((_, el) => $(el).attr('content') ?? '').get().join(',');
+  const robotsDirectives = `${headerRobots},${metaRobots}`.toLowerCase().split(/[,\s]+/).filter(Boolean);
+  const indexable = status >= 200 && status < 300 && !robotsDirectives.includes('noindex') && /text\/html|application\/xhtml\+xml/i.test(contentType);
+  const headings: Heading[] = $('h1,h2').map((_, el) => ({ text: cleanText($(el).text()), level: Number(el.tagName.slice(1)) as 1|2 })).get().filter(h => h.text);
+  const schemas: SchemaMarkup[] = $('script[type="application/ld+json" i]').map((_, el) => {
+    const raw = $(el).html()?.trim() ?? '';
+    try { const parsed: unknown = JSON.parse(raw); return { raw, parsed, types: schemaTypes(parsed), validJson: true }; }
+    catch (error) { return { raw, parsed: null, types: [], validJson: false, error: String(error) }; }
+  }).get();
+  const text = cleanText($('main').first().text() || $('body').text());
+  const links: LinkInfo[] = $('a[href]').map((_, el) => {
+    const url = normaliseUrl($(el).attr('href') ?? '', finalUrl);
+    return url ? { text: cleanText($(el).text()), url, internal: sameHost(url, finalUrl) } : null;
+  }).get().filter((v): v is LinkInfo => Boolean(v));
+  const uniqueInternalLinks = new Set(links.filter(link => link.internal).map(link => link.url));
+  const uniqueExternalLinks = new Set(links.filter(link => !link.internal).map(link => link.url));
+  const h1s = headings.filter(h => h.level === 1).map(h => h.text);
+  const h2s = headings.filter(h => h.level === 2).map(h => h.text);
+  const questionHeadings = headings.map(heading => heading.text).filter(value => /\?|^(what|why|how|when|where|who|which|can|does|is|are|should)\b/i.test(value));
+  const citedClaimCount = (text.match(/\b\d+(?:\.\d+)?%?\b[^.]{0,160}(?:according to|source:|study|report|research|data from)/gi) ?? []).length;
+  const preliminarySignals = extractKeywordSignals(title, metaDescription, h1s, h2s, text);
+  const primaryKeyword = preliminarySignals.find(signal => signal.phrase.split(' ').length > 1)?.phrase ?? (cleanText(h1s[0] || title) || 'website image');
+  const slug = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+  const imageRecommendations: ImageRecommendation[] = $('img[src]').map((_, image) => {
+    const element = $(image);
+    const src = normaliseUrl(element.attr('src') ?? '', finalUrl);
+    if (!src) return null;
+    const currentAlt = cleanText(element.attr('alt'));
+    const currentFilename = decodeURIComponent(new URL(src).pathname.split('/').pop() || 'image');
+    const stem = currentFilename.replace(/\.[^.]+$/, '');
+    const extension = (currentFilename.match(/\.[a-z0-9]{2,5}$/i)?.[0] ?? '.webp').toLowerCase();
+    const unoptimized = !stem || /^(img|image|photo|pic|dsc|untitled|screenshot)[-_ ]?\d*$/i.test(stem) || /^[a-f0-9_-]{12,}$/i.test(stem) || /\s|_/.test(stem);
+    if (currentAlt && !unoptimized) return null;
+    const context = cleanText(element.closest('figure').find('figcaption').first().text() || element.parent().text() || element.attr('title')).slice(0, 180);
+    const subject = context || primaryKeyword;
+    const suggestedAlt = cleanText(`${subject}${subject.toLowerCase().includes(primaryKeyword.toLowerCase()) ? '' : ` — ${primaryKeyword}`}`).slice(0, 160);
+    return {
+      src, currentAlt, currentFilename,
+      issue: !currentAlt && unoptimized ? 'both' : !currentAlt ? 'missing_alt' : 'unoptimized_filename',
+      suggestedAlt,
+      suggestedFilename: `${slug(`${primaryKeyword}-${subject}`) || 'descriptive-image'}${extension}`,
+      basis: 'page_context'
+    } satisfies ImageRecommendation;
+  }).get().filter(Boolean) as ImageRecommendation[];
+  const base = { title, metaDescription, metaDescriptionCharacters: [...metaDescription].length, h1s, h2s, schemas, wordCount: text ? text.split(/\s+/).length : 0, canonical };
+  const result: PageResult = {
+    requestedUrl, url: finalUrl, status, redirectChain, contentType, ...base,
+    titleCharacters: [...title].length, robotsDirectives, indexable, headings,
+    primaryCta: findCta($, finalUrl), text, links,
+    internalLinkCount: uniqueInternalLinks.size, externalLinkCount: uniqueExternalLinks.size,
+    incomingInternalLinks: 0, imageCount, imagesMissingAltText, imageRecommendations, htmlLang, hasViewportMeta,
+    canonicalMatchesUrl: canonical ? canonical === finalUrl : null, responseTimeMs,
+    suggestedSchemas: [],
+    aio: assessAio({
+      title, metaDescription, h1s, h2s, text, robotsDirectives,
+      schemaTypes: schemas.flatMap(schema => schema.types), externalLinkCount: uniqueExternalLinks.size,
+      imageCount, imagesMissingAltText, hasAuthor, hasPublishedDate, hasModifiedDate,
+      lastModified: headers.get('last-modified'), listCount, tableCount, questionHeadings, citedClaimCount
+    }),
+    keywordSignals: preliminarySignals,
+    findings: findingsFor(base), pageSpeed: [], crawledAt: new Date().toISOString()
+  };
+  result.suggestedSchemas = suggestSchemas(result);
+  if (!hasViewportMeta) result.findings.push({ category: 'seo', severity: 'warning', rule: 'viewport_missing', message: 'Viewport meta tag is missing; mobile rendering may be impaired.' });
+  if (!htmlLang) result.findings.push({ category: 'seo', severity: 'info', rule: 'html_lang_missing', message: 'The HTML lang attribute is missing.' });
+  if (imageCount && imagesMissingAltText) result.findings.push({ category: 'seo', severity: 'warning', rule: 'image_alt_missing', message: `${imagesMissingAltText} of ${imageCount} images have empty or missing alt text; decorative images should use an intentional empty alt attribute.` });
+  if (canonical && canonical !== finalUrl) result.findings.push({ category: 'seo', severity: 'info', rule: 'canonical_differs', message: `Canonical points to a different URL: ${canonical}` });
+  for (const indicator of result.aio.indicators.filter(item => item.status !== 'pass')) {
+    result.findings.push({ category: 'aio', severity: indicator.status === 'blocked' ? 'critical' : 'info', rule: `aio_${indicator.key}`, message: `${indicator.label}: ${indicator.recommendation ?? indicator.evidence}`, evidence: indicator.evidence });
+  }
+  return result;
+}

@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
-reports/
+audit-output/
+outputs/
+work/
 *.log
 .DS_Store
