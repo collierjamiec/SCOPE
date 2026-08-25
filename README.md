@@ -53,6 +53,8 @@ During a crawl, the dashboard shows live activity, fetched/analyzed/queued count
 
 Dashboard controls include:
 
+- A written executive summary covering overall health, severity mix, leading themes, and audit context without reproducing the detailed tables
+- Sortable headers across meaningful report columns, plus report-wide row search where a dedicated filter is not more useful
 - Affected-page drilldowns for priorities and page findings
 - Critical, warning, and informational finding filters
 - Default finding order of Critical → Warning → Info
@@ -60,6 +62,10 @@ Dashboard controls include:
 - Keyword position filters for Top 10, 20, 30, 50, 100, and unavailable rankings
 - GSC query/page search, metric sorting, direction, and position bands
 - GA4 landing-page search, metric sorting, minimum sessions, and key-event filters
+
+SCOPE classifies home, landing, article, category, tag, author, search, pagination, and feed surfaces. Indexable archives retain technical title, H1, canonical, status, link, and schema-validity checks, but are not penalized using article-style word-count, readability, H2, meta-description, schema-presence, or AIO-content rules. Instead, SCOPE asks whether archive indexation, canonicalization, pagination, and listing quality are intentional. Search archives receive stronger scrutiny when indexable.
+
+Full Audit is exhaustive and Fast by default: no page or crawl-depth limit, no path exclusions, archive pages included, maximum per-path and external-page ceilings, external crawling to depth 3, all modules enabled, 5,000 keyword candidates, and 100 licensed SERP checks.
 
 ### Finding severity
 

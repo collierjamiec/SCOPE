@@ -65,23 +65,40 @@ function findCta($: cheerio.CheerioAPI, baseUrl: string): CtaInfo | null {
   return cta;
 }
 
-function findingsFor(page: Pick<PageResult, 'title'|'metaDescription'|'metaDescriptionCharacters'|'h1s'|'h2s'|'schemas'|'wordCount'|'canonical'>): Finding[] {
+type ClassifiedPageType = NonNullable<PageResult['pageType']>;
+const archiveTypes = new Set<ClassifiedPageType>(['category_archive', 'tag_archive', 'author_archive', 'search_archive', 'pagination_archive', 'feed']);
+export function classifyPageType(url: string, hasArticle: boolean): ClassifiedPageType {
+  const candidate = new URL(url);
+  if (candidate.pathname === '/' && !candidate.search) return 'home';
+  if (/\/(?:feed)(?:\/|$)/i.test(candidate.pathname)) return 'feed';
+  if (candidate.searchParams.has('s') || /\/search(?:\/|$)/i.test(candidate.pathname)) return 'search_archive';
+  if (/\/category(?:\/|$)/i.test(candidate.pathname)) return 'category_archive';
+  if (/\/tag(?:\/|$)/i.test(candidate.pathname)) return 'tag_archive';
+  if (/\/author(?:\/|$)/i.test(candidate.pathname)) return 'author_archive';
+  if (/\/page\/\d+(?:\/|$)/i.test(candidate.pathname)) return 'pagination_archive';
+  return hasArticle || /\/\d{4}\/\d{1,2}\//.test(candidate.pathname) ? 'article' : 'landing';
+}
+
+function findingsFor(page: Pick<PageResult, 'title'|'metaDescription'|'metaDescriptionCharacters'|'h1s'|'h2s'|'schemas'|'wordCount'|'canonical'> & { pageType: ClassifiedPageType }): Finding[] {
   const out: Finding[] = [];
+  const archive = archiveTypes.has(page.pageType);
   if (!page.title) out.push({ category: 'seo', severity: 'critical', rule: 'title_missing', message: 'SEO title is missing.' });
-  if (!page.metaDescription) out.push({ category: 'seo', severity: 'warning', rule: 'meta_description_missing', message: 'Meta description is missing.' });
-  else if (page.metaDescriptionCharacters < 70 || page.metaDescriptionCharacters > 170) out.push({ category: 'seo', severity: 'warning', rule: 'meta_description_length', message: `Meta description has ${page.metaDescriptionCharacters} characters; review its SERP presentation.`, evidence: page.metaDescription });
+  if (!page.metaDescription && !archive) out.push({ category: 'seo', severity: 'warning', rule: 'meta_description_missing', message: 'Meta description is missing.' });
+  else if (page.metaDescription && !archive && (page.metaDescriptionCharacters < 70 || page.metaDescriptionCharacters > 170)) out.push({ category: 'seo', severity: 'warning', rule: 'meta_description_length', message: `Meta description has ${page.metaDescriptionCharacters} characters; review its SERP presentation.`, evidence: page.metaDescription });
   if (page.h1s.length === 0) out.push({ category: 'seo', severity: 'warning', rule: 'h1_missing', message: 'No H1 was found.' });
   if (page.h1s.length > 1) out.push({ category: 'seo', severity: 'info', rule: 'multiple_h1', message: `${page.h1s.length} H1 elements were found.` });
   if (!page.canonical) out.push({ category: 'seo', severity: 'info', rule: 'canonical_missing', message: 'No canonical link was found.' });
-  if (page.wordCount < 150) out.push({ category: 'geo', severity: 'warning', rule: 'thin_content', message: `Only ${page.wordCount} visible words were extracted.` });
-  if (page.h2s.length === 0) out.push({ category: 'aio', severity: 'info', rule: 'answer_structure', message: 'No H2 sections were found; clear topical sections may improve extractability.' });
-  if (page.schemas.length === 0) out.push({ category: 'geo', severity: 'info', rule: 'schema_missing', message: 'No JSON-LD markup was found.' });
+  if (!archive && page.wordCount < 150) out.push({ category: 'geo', severity: 'warning', rule: 'thin_content', message: `Only ${page.wordCount} visible words were extracted.` });
+  if (!archive && page.h2s.length === 0) out.push({ category: 'aio', severity: 'info', rule: 'answer_structure', message: 'No H2 sections were found; clear topical sections may improve extractability.' });
+  if (!archive && page.schemas.length === 0) out.push({ category: 'geo', severity: 'info', rule: 'schema_missing', message: 'No JSON-LD markup was found.' });
   if (page.schemas.some(s => !s.validJson)) out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: 'At least one JSON-LD block is invalid JSON.' });
+  if (archive) out.push({ category: 'seo', severity: page.pageType === 'search_archive' ? 'warning' : 'info', rule: 'indexable_archive_review', message: `Indexable ${page.pageType.replaceAll('_', ' ')} detected; confirm that indexing, canonicalization, pagination, and listing quality are intentional.` });
   return out;
 }
 
 export function extractPage(requestedUrl: string, finalUrl: string, status: number, contentType: string, html: string, headers: Headers, redirectChain: string[] = [], responseTimeMs: number | null = null): PageResult {
   const $ = cheerio.load(html);
+  const pageType = classifyPageType(finalUrl, $('article,[itemtype*="Article"],meta[property="og:type"][content="article" i]').length > 0);
   const imageCount = $('img').length;
   const imagesMissingAltText = $('img').filter((_, image) => !cleanText($(image).attr('alt'))).length;
   const htmlLang = cleanText($('html').attr('lang')) || null;
@@ -153,7 +170,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
       basis: 'page_context'
     } satisfies ImageRecommendation;
   }).get().filter(Boolean) as ImageRecommendation[];
-  const base = { title, metaDescription, metaDescriptionCharacters: [...metaDescription].length, h1s, h2s, schemas, wordCount: contentMetrics.wordCount, canonical };
+  const base = { title, metaDescription, metaDescriptionCharacters: [...metaDescription].length, h1s, h2s, schemas, wordCount: contentMetrics.wordCount, canonical, pageType };
   const result: PageResult = {
     requestedUrl, url: finalUrl, status, redirectChain, contentType, ...base,
     titleCharacters: [...title].length, robotsDirectives, indexable, headings,
@@ -176,9 +193,9 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   if (!htmlLang) result.findings.push({ category: 'seo', severity: 'info', rule: 'html_lang_missing', message: 'The HTML lang attribute is missing.' });
   if (imageCount && imagesMissingAltText) result.findings.push({ category: 'seo', severity: 'warning', rule: 'image_alt_missing', message: `${imagesMissingAltText} of ${imageCount} images have empty or missing alt text; decorative images should use an intentional empty alt attribute.` });
   if (canonical && canonical !== finalUrl) result.findings.push({ category: 'seo', severity: 'info', rule: 'canonical_differs', message: `Canonical points to a different URL: ${canonical}` });
-  if (contentMetrics.fleschKincaidGrade !== null && contentMetrics.fleschKincaidGrade > 12) result.findings.push({ category: 'geo', severity: 'info', rule: 'readability_difficult', message: `Flesch-Kincaid grade level is ${contentMetrics.fleschKincaidGrade}; consider simplifying copy where a broad audience is intended.` });
-  if (contentMetrics.averageWordsPerSentence > 25) result.findings.push({ category: 'geo', severity: 'info', rule: 'long_sentences', message: `Average sentence length is ${contentMetrics.averageWordsPerSentence} words; shorter sentences may improve scanability.` });
-  for (const indicator of result.aio.indicators.filter(item => item.status !== 'pass')) {
+  if (!archiveTypes.has(pageType) && contentMetrics.fleschKincaidGrade !== null && contentMetrics.fleschKincaidGrade > 12) result.findings.push({ category: 'geo', severity: 'info', rule: 'readability_difficult', message: `Flesch-Kincaid grade level is ${contentMetrics.fleschKincaidGrade}; consider simplifying copy where a broad audience is intended.` });
+  if (!archiveTypes.has(pageType) && contentMetrics.averageWordsPerSentence > 25) result.findings.push({ category: 'geo', severity: 'info', rule: 'long_sentences', message: `Average sentence length is ${contentMetrics.averageWordsPerSentence} words; shorter sentences may improve scanability.` });
+  for (const indicator of result.aio.indicators.filter(item => item.status !== 'pass' && !archiveTypes.has(pageType))) {
     result.findings.push({ category: 'aio', severity: indicator.status === 'blocked' ? 'critical' : 'info', rule: `aio_${indicator.key}`, message: `${indicator.label}: ${indicator.recommendation ?? indicator.evidence}`, evidence: indicator.evidence });
   }
   return result;

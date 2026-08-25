@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractPage } from '../src/extract.js';
+import { classifyPageType, extractPage } from '../src/extract.js';
 
 test('extracts metadata counts, CTA, schema, and noindex', () => {
   const description = 'A concise description for search results.';
@@ -34,4 +34,13 @@ test('produces transparent AI answer-readiness dimensions and opportunities', ()
   assert.equal(result.aio.visibilityMeasured, false);
   assert.equal(result.aio.indicators.find(item => item.key === 'snippet_access')?.status, 'blocked');
   assert.ok(result.aio.questionsDetected.includes('What is an answering service?'));
+});
+
+test('classifies archive pages and applies archive-specific findings', () => {
+  assert.equal(classifyPageType('https://example.test/category/news/', false), 'category_archive');
+  assert.equal(classifyPageType('https://example.test/?s=scope', false), 'search_archive');
+  const result = extractPage('https://example.test/category/news/', 'https://example.test/category/news/', 200, 'text/html', '<title>News</title><h1>News</h1><p>Short listing.</p>', new Headers());
+  assert.equal(result.pageType, 'category_archive');
+  assert.ok(result.findings.some(finding => finding.rule === 'indexable_archive_review'));
+  assert.ok(!result.findings.some(finding => finding.rule === 'thin_content' || finding.rule === 'meta_description_missing'));
 });

@@ -7,6 +7,10 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 - Documentation synchronized with the current dashboard, crawler, imports, reports, and security model.
 - OpenAI crawler reporting distinguishes search discovery, potential training, and user-initiated access.
 - Intent-coverage scoring recognizes substantial editorial structure without requiring artificial commercial or FAQ headings, and recommendations disclose the precise missing signals.
+- Sortable headers and contextual row filters are available throughout the reporting dashboard.
+- Page-type classification applies archive-specific rules instead of judging archives like articles or landing pages.
+- Full Audit now selects exhaustive maximum scope, every module, external depth 3, and Fast pacing.
+- A written Executive Summary synthesizes overall health, severity, leading themes, and audit context without duplicating detailed tabs.
 
 ## 2.0.0 — 2026-08-25
 

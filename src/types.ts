@@ -165,6 +165,7 @@ export interface Finding {
 export interface PageResult {
   requestedUrl: string;
   url: string;
+  pageType?: "home" | "article" | "landing" | "category_archive" | "tag_archive" | "author_archive" | "search_archive" | "pagination_archive" | "feed";
   status: number;
   redirectChain: string[];
   contentType: string;
