@@ -6,6 +6,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 - Documentation synchronized with the current dashboard, crawler, imports, reports, and security model.
 - OpenAI crawler reporting distinguishes search discovery, potential training, and user-initiated access.
+- Intent-coverage scoring recognizes substantial editorial structure without requiring artificial commercial or FAQ headings, and recommendations disclose the precise missing signals.
 
 ## 2.0.0 — 2026-08-25
 

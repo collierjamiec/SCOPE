@@ -55,13 +55,27 @@ export function assessAio(input: AioInput): AioAssessment {
   entityClarity = clamp(entityClarity, 15);
   indicators.push({ key: 'entity_clarity', label: 'Entity and semantic clarity', status: entityClarity >= 11 ? 'pass' : 'opportunity', evidence: `${input.schemaTypes.length ? `Schema types: ${input.schemaTypes.join(', ')}` : 'No declared schema types'}; title/H1 alignment ${input.title && input.h1s.length ? 'available' : 'incomplete'}.`, recommendation: entityClarity < 11 ? 'Clarify the principal organization, service, product, person, or place in visible copy and matching structured data.' : undefined });
 
+  const wordCount = input.text.split(/\s+/).filter(Boolean).length;
+  const hasQuestionCoverage = input.questionHeadings.length >= 2;
+  const followUpTerms = input.h2s.join(' ').match(/price|cost|compare|alternative|benefit|process|how|why|who|when|requirement|limitation|next step/gi) ?? [];
   let intentCoverage = 0;
-  if (input.text.split(/\s+/).length >= 500) intentCoverage += 5;
+  if (wordCount >= 500) intentCoverage += 5;
   if (input.h2s.length >= 3) intentCoverage += 4;
-  if (input.questionHeadings.length >= 2) intentCoverage += 3;
-  if (/price|cost|compare|alternative|benefit|process|how|why|who|when|requirement/i.test(input.h2s.join(' '))) intentCoverage += 3;
+  if (hasQuestionCoverage) intentCoverage += 3;
+  if (followUpTerms.length) intentCoverage += 3;
+  // Editorial pages can demonstrate broad intent coverage through substantial,
+  // well-sectioned treatment without forcing artificial commercial or FAQ headings.
+  if (input.h2s.length >= 8) intentCoverage += 2;
   intentCoverage = clamp(intentCoverage, 15);
-  indicators.push({ key: 'intent_coverage', label: 'Intent and follow-up coverage', status: intentCoverage >= 11 ? 'pass' : 'opportunity', evidence: `${input.text.split(/\s+/).filter(Boolean).length} words across ${input.h2s.length} H2 sections.`, recommendation: intentCoverage < 11 ? 'Cover likely follow-up questions, decision criteria, limitations, alternatives, process, and next steps.' : undefined });
+  const intentEvidence = `${wordCount} words across ${input.h2s.length} H2 sections; ${input.questionHeadings.length} question-led headings; ${followUpTerms.length} explicit follow-up topic signal${followUpTerms.length === 1 ? '' : 's'} in H2s.`;
+  const intentRecommendation = wordCount < 500
+    ? 'Expand the page only where needed to answer the primary intent with original, useful detail.'
+    : input.h2s.length < 3
+      ? 'Organize the content into descriptive sections that reflect the reader’s main questions or tasks.'
+      : !hasQuestionCoverage && !followUpTerms.length
+        ? 'Add a section that directly answers a realistic follow-up question for this specific topic, if the existing sections do not already answer it.'
+        : 'Review the page for one material reader question or next step that is not already answered; add it only when it improves the page.';
+  indicators.push({ key: 'intent_coverage', label: 'Intent and follow-up coverage', status: intentCoverage >= 11 ? 'pass' : 'opportunity', evidence: intentEvidence, recommendation: intentCoverage < 11 ? intentRecommendation : undefined });
 
   const freshness = clamp((input.hasPublishedDate ? 2 : 0) + (input.hasModifiedDate ? 2 : 0) + (input.lastModified ? 1 : 0), 5);
   indicators.push({ key: 'freshness', label: 'Freshness signals', status: freshness >= 3 ? 'pass' : 'opportunity', evidence: `Published date ${input.hasPublishedDate ? 'found' : 'not found'}; modified date ${input.hasModifiedDate ? 'found' : 'not found'}; HTTP Last-Modified ${input.lastModified ?? 'not supplied'}.`, recommendation: freshness < 3 ? 'Expose credible published/updated dates and keep sitemap or HTTP freshness signals aligned.' : undefined });
