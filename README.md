@@ -32,7 +32,7 @@ SCOPE distinguishes **AIO answer readiness**, which can be assessed from crawl e
 - Supports manual path-prefix exclusions. `/blog` excludes that path and all descendants without assuming every site has the same structure.
 - Supports sitemap-only crawling and optional exclusion of tag, category, author, feed, search, and pagination archives.
 - Normalizes common tracking parameters and applies configurable URL-depth and per-path ceilings.
-- Inventories external links without requesting them by default. Dashboard users may check external pages to depth 1, 2, or 3 with a separate limit.
+- Inventories external links without requesting them by default. Full Audit validates each directly linked external URL but does not follow links beyond it. Custom audits may crawl external pages to depth 2 or 3 with a separate limit.
 - Uses raw HTML by default and invokes Playwright only for pages that appear to require JavaScript rendering when that module is enabled.
 - Supports pause, resume, partial-report completion, and cancellation without a report.
 - Offers Fast, Standard, and Polite pacing. Throughput still depends on the target server, redirects, timeouts, JavaScript rendering, PageSpeed, and enabled modules.

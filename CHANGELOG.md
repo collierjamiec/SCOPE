@@ -13,6 +13,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 - A written Executive Summary synthesizes overall health, severity, leading themes, and audit context without duplicating detailed tabs.
 - Corrected GSC upload guidance and reporting-period detection to use the standard `Filters.csv`.
 - Added a dedicated PageSpeed settings section and sortable PageSpeed dashboard with Lighthouse lab scores, timing metrics, errors, and available Chrome UX Report field data.
+- Changed Full Audit to validate directly linked external URLs without crawling onward through external sites.
 
 ## 2.0.0 — 2026-08-25
 
