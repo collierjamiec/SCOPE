@@ -101,7 +101,7 @@ function severityColor(severity: Finding['severity']): string {
   return severity === 'critical' ? RED : severity === 'warning' ? GOLD : BLUE;
 }
 
-function pageSection(page: PageResult, index: number): Array<Paragraph | Table> {
+function pageSection(page: PageResult, index: number, config: AuditReport['config']): Array<Paragraph | Table> {
   const children: Array<Paragraph | Table> = [
     heading(`${index + 1}. ${page.title || 'Untitled page'}`, 2),
     body(page.url, { boldLabel: 'URL' }),
@@ -121,16 +121,18 @@ function pageSection(page: PageResult, index: number): Array<Paragraph | Table> 
     body(page.metaDescription || 'Missing', { boldLabel: 'Meta description' }),
     body(page.h1s.join(' | ') || 'Missing', { boldLabel: 'H1' }),
     body(page.h2s.join(' | ') || 'None detected', { boldLabel: 'H2s' }),
-    body(page.primaryCta ? `${page.primaryCta.text} → ${page.primaryCta.url} (${Math.round(page.primaryCta.confidence * 100)}% confidence)` : 'Not confidently detected', { boldLabel: 'Primary CTA' }),
-    heading('Detected Schema JSON-LD', 3)
+    body(page.primaryCta ? `${page.primaryCta.text} → ${page.primaryCta.url} (${Math.round(page.primaryCta.confidence * 100)}% confidence)` : 'Not confidently detected', { boldLabel: 'Primary CTA' })
   ];
-  if (!page.schemas.length) children.push(body('None detected.'));
-  for (const schema of page.schemas) {
-    children.push(body(schema.validJson ? `Valid: ${schema.types.join(', ') || 'Type not declared'}` : `Invalid JSON: ${schema.error ?? 'Unable to parse'}`));
+  if (config.analyzeSchema !== false) {
+    children.push(heading('Detected Schema JSON-LD', 3));
+    if (!page.schemas.length) children.push(body('None detected.'));
+    for (const schema of page.schemas) {
+      children.push(body(schema.validJson ? `Valid: ${schema.types.join(', ') || 'Type not declared'}` : `Invalid JSON: ${schema.error ?? 'Unable to parse'}`));
+    }
+    children.push(horizontalRule(), heading('Suggested Schema', 3));
+    if (!page.suggestedSchemas?.length) children.push(body('No additional schema type was confidently suggested from the visible page content.'));
+    else for (const schema of page.suggestedSchemas) children.push(bullet(`${schema.type} (${schema.confidence} confidence) — ${schema.reason}`));
   }
-  children.push(horizontalRule(), heading('Suggested Schema', 3));
-  if (!page.suggestedSchemas?.length) children.push(body('No additional schema type was confidently suggested from the visible page content.'));
-  else for (const schema of page.suggestedSchemas) children.push(bullet(`${schema.type} (${schema.confidence} confidence) — ${schema.reason}`));
   if (page.aio) {
     children.push(heading(`AI Answer Readiness — ${page.aio.score}/100`, 3));
     children.push(body(`Readiness: ${page.aio.label.replaceAll('_', ' ')}. AI visibility is not measured without platform citation or referral data.`));
@@ -145,7 +147,7 @@ function pageSection(page: PageResult, index: number): Array<Paragraph | Table> 
     const speed = page.pageSpeed[0];
     children.push(body(speed.error ? `Unavailable - ${speed.error}` : `Performance ${score(speed.performance)}; Accessibility ${score(speed.accessibility)}; Best Practices ${score(speed.bestPractices)}; SEO ${score(speed.seo)}`, { boldLabel: 'PageSpeed mobile' }));
   }
-  if (page.imageRecommendations?.length) {
+  if (config.analyzeImages !== false && page.imageRecommendations?.length) {
     children.push(heading('Image optimization recommendations', 3));
     children.push(body('Suggestions marked “page context” infer the image subject from nearby copy and page targets. “Vision” means a configured image-analysis service inspected the image itself. Decorative images may correctly retain empty alt text.'));
     children.push(dataTable(
@@ -250,7 +252,8 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
     [2300, 2300, 3560, 1200]
   ));
   children.push(heading('Broken internal links', 1));
-  if (!report.brokenLinks?.length) children.push(body('No crawled internal links returned HTTP 4xx/5xx responses. External links are inventoried but are not requested by this same-host crawler.'));
+  if (report.config.reportBrokenLinks === false) children.push(body('Broken-link reporting was not selected for this audit.'));
+  else if (!report.brokenLinks?.length) children.push(body('No crawled internal links returned HTTP 4xx/5xx responses. External links are inventoried but are not requested by this same-host crawler.'));
   else children.push(dataTable(
     ['Source page', 'Anchor text', 'Broken destination', 'HTTP'],
     report.brokenLinks.map(link => [link.sourcePage, link.anchorText, link.destination, link.status ?? 'n/a']),
@@ -287,7 +290,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   }
 
   children.push(heading('Page-by-page findings', 1));
-  report.pages.forEach((page, index) => children.push(...pageSection(page, index)));
+  report.pages.forEach((page, index) => children.push(...pageSection(page, index, report.config)));
 
   children.push(heading('Excluded URLs', 1));
   children.push(body('These URLs were not included in organic SEO/GEO analysis because they were disallowed, non-indexable, non-HTML, unsuccessful, or could not be fetched.'));

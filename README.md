@@ -41,6 +41,8 @@ npm run dashboard
 
 Open the displayed local URL, enter any starting page, and watch live robots, sitemap, crawl, PageSpeed, and keyword-analysis progress. Results appear in searchable browser-friendly tables, with DOCX and PDF downloads when LibreOffice is available.
 
+Use the orange gear to open audit settings. Choose an entire-site or limited crawl, add excluded path prefixes, and independently enable PageSpeed, image, broken-link, and schema analysis. **Select full audit** enables every module, clears exclusions, and selects the entire eligible site. By default, image, broken-link, and schema analysis are enabled while PageSpeed is opt-in.
+
 The default copyright owner and creator credit are **Jamie C. Collier** and can be overridden with `SCOPE_COPYRIGHT_OWNER` and `SCOPE_CREATOR_NAME`.
 
 Completed reports can be downloaded as DOCX or PDF from the dashboard. SCOPE does not collect recipient addresses or send email; users can share the downloaded PDF through their own email service.

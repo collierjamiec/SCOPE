@@ -23,6 +23,9 @@ Options:
   --exclude PATHS     Comma-separated path prefixes to omit, e.g. /blog,/careers
   --out DIRECTORY     Output directory, default ./audit-output
   --pagespeed         Request mobile PageSpeed Insights data
+  --no-images         Skip image optimization analysis
+  --no-broken-links   Skip broken internal-link reporting
+  --no-schema         Skip detected and suggested schema analysis
   --non-interactive   Do not ask about licensed SERP API access
 
 SERP credentials can be supplied interactively or with SERP_ENDPOINT and
@@ -54,7 +57,7 @@ SERP_API_KEY. The endpoint adapter contract is documented in README.md.`);
     concurrency: 1, delayMs: Number(option('delay-ms') ?? 250), userAgent: 'OrganicSiteAuditor/0.1 (+respectful SEO audit)',
     pageSpeed: flag('pagespeed'), pageSpeedApiKey: process.env.PAGESPEED_API_KEY, serp,
     imageAnalysis: process.env.IMAGE_ANALYSIS_ENDPOINT && process.env.IMAGE_ANALYSIS_API_KEY ? { endpoint: process.env.IMAGE_ANALYSIS_ENDPOINT, apiKey: process.env.IMAGE_ANALYSIS_API_KEY } : undefined,
-    excludePaths
+    excludePaths, analyzeImages: !flag('no-images'), reportBrokenLinks: !flag('no-broken-links'), analyzeSchema: !flag('no-schema')
   };
   console.log(`Crawling ${startUrl} (${config.maxPages === null ? 'all discoverable pages' : `maximum ${config.maxPages} pages`})...`);
   const report = await crawlSite(config, progress => console.log(`[${progress.phase}] ${progress.message} — ${progress.fetched} fetched, ${progress.analyzed} analyzed, ${progress.queued} queued`));

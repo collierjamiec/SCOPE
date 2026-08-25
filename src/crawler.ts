@@ -151,7 +151,16 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) { excluded.push({ url: finalUrl, reason: 'Non-HTML content', status: response.status }); continue; }
       const html = await response.text();
       const page = extractPage(url, finalUrl, response.status, contentType, html, response.headers, redirectChain, responseTimeMs);
-      await enrichImageRecommendations(page, input.imageAnalysis);
+      if (input.analyzeImages !== false) await enrichImageRecommendations(page, input.imageAnalysis);
+      else {
+        page.imageRecommendations = [];
+        page.findings = page.findings.filter(finding => !finding.rule.startsWith('image_') && finding.rule !== 'aio_multimodal');
+      }
+      if (input.analyzeSchema === false) {
+        page.schemas = [];
+        page.suggestedSchemas = [];
+        page.findings = page.findings.filter(finding => !finding.rule.includes('schema'));
+      }
       // Discover allowed same-host URLs even if the current page is non-indexable.
       for (const link of page.links) {
         if (link.internal && sameHost(link.url, startUrl) && !queued.has(link.url) && !fetched.has(link.url)) { queue.push(link.url); queued.add(link.url); }
@@ -182,7 +191,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const cannibalization = detectCannibalization(keywords);
   for (const redirect of redirects) redirect.sourcePages = pages.filter(page => page.links.some(link => link.url === redirect.source)).map(page => page.url);
   const failures = new Map(excluded.filter(item => item.status && item.status >= 400).map(item => [item.url, item]));
-  const brokenLinks = pages.flatMap(page => page.links.filter(link => link.internal && failures.has(link.url)).map(link => {
+  const brokenLinks = input.reportBrokenLinks === false ? [] : pages.flatMap(page => page.links.filter(link => link.internal && failures.has(link.url)).map(link => {
     const failed = failures.get(link.url)!;
     return { sourcePage: page.url, anchorText: link.text || '[No anchor text]', destination: link.url, status: failed.status ?? null, error: failed.reason };
   }));
@@ -195,7 +204,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     config: {
       startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
-      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
+      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,

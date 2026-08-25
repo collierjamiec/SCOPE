@@ -12,6 +12,9 @@ export interface AuditConfig {
   imageAnalysis?: ImageAnalysisConfig;
   /** URL path prefixes to omit, for example /blog excludes /blog and /blog/*. */
   excludePaths?: string[];
+  analyzeImages?: boolean;
+  reportBrokenLinks?: boolean;
+  analyzeSchema?: boolean;
 }
 
 export interface ImageAnalysisConfig {
