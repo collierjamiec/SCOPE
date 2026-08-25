@@ -55,6 +55,13 @@ export function safeCrawlUrl(url: string, stripTracking = true): string {
 
 const urlDepth = (url: string) => new URL(url).pathname.split('/').filter(Boolean).length;
 const pathBucket = (url: string) => new URL(url).pathname.split('/').filter(Boolean)[0] ?? '/';
+export function isArchiveUrl(url: string): boolean {
+  const candidate = new URL(url);
+  return /^\/(tag|category|author)(\/|$)/i.test(candidate.pathname)
+    || /\/page\/\d+\/?$/i.test(candidate.pathname)
+    || /\/feed\/?$/i.test(candidate.pathname)
+    || candidate.searchParams.has('s');
+}
 
 export function needsJavaScriptRendering(html: string): boolean {
   const $ = cheerio.load(html);
@@ -206,6 +213,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const processUrl = async (url: string) => {
     if (fetched.has(url) || control.isCancelled()) return;
     if (isExcludedUrl(url, configuredExclusions)) { excluded.push({ url, reason: 'Excluded by audit configuration' }); return; }
+    if (input.excludeArchives && isArchiveUrl(url)) { excluded.push({ url, reason: 'Excluded common archive URL' }); return; }
     if (input.maxDepth !== null && urlDepth(url) > (input.maxDepth ?? 12)) { excluded.push({ url, reason: `Crawl safety: URL depth exceeds ${input.maxDepth ?? 12}` }); return; }
     const bucket = pathBucket(url), bucketCount = pathCounts.get(bucket) ?? 0;
     if (bucketCount >= (input.maxUrlsPerPath ?? 2000)) { excluded.push({ url, reason: `Crawl safety: more than ${input.maxUrlsPerPath ?? 2000} URLs in /${bucket === '/' ? '' : bucket}` }); return; }
@@ -239,10 +247,10 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
         page.suggestedSchemas = [];
         page.findings = page.findings.filter(finding => !finding.rule.includes('schema'));
       }
-      for (const link of page.links) {
-        const destination = clean(link.url);
-        if (link.internal && sameHost(destination, startUrl) && !queued.has(destination) && !fetched.has(destination)) { queue.push(destination); queued.add(destination); }
-      }
+      if (!input.sitemapOnly) for (const link of page.links) {
+          const destination = clean(link.url);
+          if (link.internal && sameHost(destination, startUrl) && !queued.has(destination) && !fetched.has(destination)) { queue.push(destination); queued.add(destination); }
+        }
       if (!page.indexable) { excluded.push({ url: finalUrl, reason: `Non-indexable (${page.robotsDirectives.includes('noindex') ? 'noindex' : `HTTP ${response.status}`})`, status: response.status }); return; }
       if (analyzedUrls.has(finalUrl)) return;
       analyzedUrls.add(finalUrl);
@@ -293,7 +301,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     config: {
       startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords, maxRankings: input.maxRankings ?? 100,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
-      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
+      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), sitemapOnly: Boolean(input.sitemapOnly), excludeArchives: Boolean(input.excludeArchives), analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,

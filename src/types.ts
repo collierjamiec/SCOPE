@@ -25,6 +25,10 @@ export interface AuditConfig {
   maxUrlsPerPath?: number;
   stripTrackingParameters?: boolean;
   renderJavaScript?: boolean;
+  /** Restrict the crawl to the seed URL and URLs declared in XML sitemaps. */
+  sitemapOnly?: boolean;
+  /** Skip common low-value archive surfaces such as tags, authors, feeds, and pagination. */
+  excludeArchives?: boolean;
 }
 
 export interface ImageAnalysisConfig {

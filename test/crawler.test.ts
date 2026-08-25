@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { crawlSite, isExcludedUrl, needsJavaScriptRendering, safeCrawlUrl, validateConfig } from '../src/crawler.js';
+import { crawlSite, isArchiveUrl, isExcludedUrl, needsJavaScriptRendering, safeCrawlUrl, validateConfig } from '../src/crawler.js';
 
 test('accepts an unlimited crawl configuration', () => {
   assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
@@ -30,6 +30,14 @@ test('skips browser rendering for meaningful server-rendered pages', () => {
 
 test('uses browser rendering for thin JavaScript application shells', () => {
   assert.equal(needsJavaScriptRendering('<html><head><title>App</title></head><body><div id="root"></div><script src="app.js"></script></body></html>'), true);
+});
+
+test('identifies common low-value archive URL patterns', () => {
+  assert.equal(isArchiveUrl('https://example.test/tag/seo'), true);
+  assert.equal(isArchiveUrl('https://example.test/category/news'), true);
+  assert.equal(isArchiveUrl('https://example.test/articles/page/3'), true);
+  assert.equal(isArchiveUrl('https://example.test/feed/'), true);
+  assert.equal(isArchiveUrl('https://example.test/resource/seo-guide'), false);
 });
 
 test('crawl respects robots and excludes noindex pages from analysis', async (context) => {
