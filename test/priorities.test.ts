@@ -11,4 +11,5 @@ test('ranks widespread critical findings ahead of informational findings', () =>
   assert.equal(result[0].issue, 'Missing title');
   assert.equal(result[0].impact, 'high');
   assert.equal(result[0].affectedPages, 2);
+  assert.deepEqual(result[0].affectedUrls, ['https://example.com/a', 'https://example.com/b']);
 });
