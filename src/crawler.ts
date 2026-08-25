@@ -151,13 +151,18 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const configuredExclusions = input.excludePaths ?? [];
   const pathCounts = new Map<string, number>();
   let renderedBrowser: import('playwright').Browser | undefined;
+  let renderedPage: import('playwright').Page | undefined;
   const renderedHtml = async (url: string) => {
     process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve('.playwright-browsers');
     const { chromium } = await import('playwright');
     renderedBrowser ??= await chromium.launch({ headless: true });
-    const browserPage = await renderedBrowser.newPage({ userAgent: input.userAgent });
-    try { await browserPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 }); await browserPage.waitForTimeout(750); return await browserPage.content(); }
-    finally { await browserPage.close(); }
+    if (!renderedPage) {
+      renderedPage = await renderedBrowser.newPage({ userAgent: input.userAgent });
+      await renderedPage.route('**/*', route => ['image', 'media', 'font'].includes(route.request().resourceType()) ? route.abort() : route.continue());
+    }
+    await renderedPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await renderedPage.waitForTimeout(250);
+    return renderedPage.content();
   };
   await onProgress({ phase: 'sitemaps', message: `Discovered ${sitemapInfo.pageUrls.length} sitemap URLs`, fetched: 0, analyzed: 0, queued: queue.length, percent: input.maxPages ? 2 : null });
 
