@@ -19,6 +19,7 @@ export interface AuditConfig {
   analyzeSchema?: boolean;
   /** Raw exports are consumed locally and omitted from the persisted report config. */
   gscCsv?: string;
+  gscCsvFiles?: string[];
   gscQueryPageCsv?: string;
   ga4Csv?: string;
   /** Safety controls for unlimited and highly faceted sites. */
@@ -212,7 +213,7 @@ export interface CannibalizationIssue {
 
 export interface AuditReport {
   domain: string;
-  config: Omit<AuditConfig, "pageSpeedApiKey" | "serp" | "imageAnalysis" | "gscCsv" | "gscQueryPageCsv" | "ga4Csv"> & { serpConfigured: boolean; imageAnalysisConfigured: boolean };
+  config: Omit<AuditConfig, "pageSpeedApiKey" | "serp" | "imageAnalysis" | "gscCsv" | "gscCsvFiles" | "gscQueryPageCsv" | "ga4Csv"> & { serpConfigured: boolean; imageAnalysisConfigured: boolean };
   summary: {
     pagesFetched: number;
     indexablePagesAnalyzed: number;

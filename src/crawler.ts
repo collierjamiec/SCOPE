@@ -328,8 +328,10 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   }
   await onProgress({ phase: 'keywords', message: 'Scoring keyword targets and checking cannibalization', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98 });
   const keywords = aggregateKeywords(pages, input.maxKeywords);
-  const gscRows = mergeGscExport(keywords, input.gscCsv, input.maxKeywords, startUrl)
-    + mergeGscExport(keywords, input.gscQueryPageCsv, input.maxKeywords, startUrl);
+  const standardGscFiles = input.gscCsvFiles?.length ? input.gscCsvFiles : input.gscCsv ? [input.gscCsv] : [];
+  const combinedGscFiles = [input.gscQueryPageCsv, ...standardGscFiles.filter(csv => /(?:^|,)\s*(?:page|top pages)\s*(?:,|$)/im.test(csv) && /(?:^|,)\s*(?:query|top queries)\s*(?:,|$)/im.test(csv))].filter((csv): csv is string => Boolean(csv));
+  const selectedGscFiles = combinedGscFiles.length ? combinedGscFiles : standardGscFiles;
+  const gscRows = selectedGscFiles.reduce((total, csv) => total + mergeGscExport(keywords, csv, input.maxKeywords, startUrl), 0);
   const ga4Rows = applyGa4Export(pages, input.ga4Csv, startUrl);
   const rankingCandidates = keywords.slice(0, input.maxRankings ?? 100);
   if (input.serp && rankingCandidates.length) applyRankings(rankingCandidates, await getRankings(new HttpSerpProvider(input.serp), rankingCandidates, new URL(startUrl).hostname));
