@@ -12,6 +12,11 @@ test('accepts thousands of discovered keywords while limiting ranking checks', (
   assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 5000, maxRankings: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
 });
 
+test('accepts bounded external crawling settings', () => {
+  assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: 10, maxKeywords: 100, concurrency: 8, delayMs: 25, userAgent: 'test', pageSpeed: false, externalCrawlDepth: 3, maxExternalPages: 500 }));
+  assert.throws(() => validateConfig({ startUrl: 'https://example.test', maxPages: 10, maxKeywords: 100, concurrency: 8, delayMs: 25, userAgent: 'test', pageSpeed: false, externalCrawlDepth: 4 }));
+});
+
 test('normalizes tracking parameters before queueing crawl URLs', () => {
   assert.equal(safeCrawlUrl('https://example.test/a?utm_source=x&b=2&a=1#section'), 'https://example.test/a?a=1&b=2');
   assert.equal(safeCrawlUrl('https://example.test/article?share=twitter'), 'https://example.test/article');

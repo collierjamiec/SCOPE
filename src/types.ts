@@ -30,6 +30,9 @@ export interface AuditConfig {
   sitemapOnly?: boolean;
   /** Skip common low-value archive surfaces such as tags, authors, feeds, and pagination. */
   excludeArchives?: boolean;
+  /** 0 inventories external links without requesting them; 1-3 follows external HTML links to that depth. */
+  externalCrawlDepth?: number;
+  maxExternalPages?: number;
 }
 
 export interface ImageAnalysisConfig {
@@ -221,6 +224,7 @@ export interface AuditReport {
   sitemaps: SitemapResult[];
   redirects: RedirectResult[];
   brokenLinks: BrokenLinkResult[];
+  externalPages?: ExternalPageResult[];
   pages: PageResult[];
   excludedPages: Array<{ url: string; reason: string; status?: number }>;
   keywords: KeywordCandidate[];
@@ -230,6 +234,19 @@ export interface AuditReport {
   priorities: Array<{ rank: number; area: string; issue: string; impact: 'high' | 'medium' | 'low'; effort: 'low' | 'medium' | 'high'; affectedPages: number; affectedUrls: string[]; recommendation: string }>;
   generatedAt: string;
   partial?: boolean;
+}
+
+export interface ExternalPageResult {
+  url: string;
+  finalUrl: string;
+  depth: number;
+  status: number | null;
+  contentType: string;
+  responseTimeMs: number | null;
+  redirectChain: string[];
+  sourcePages: string[];
+  robotsAllowed: boolean;
+  error?: string;
 }
 
 export interface RedirectResult {

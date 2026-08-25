@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import * as cheerio from 'cheerio';
-import type { AuditConfig, AuditReport, PageResult, SitemapResult } from './types.js';
+import type { AuditConfig, AuditReport, ExternalPageResult, PageResult, SitemapResult } from './types.js';
 import { extractPage } from './extract.js';
 import { aggregateKeywords, applyRankings, detectCannibalization } from './keywords.js';
 import { applyGa4Export, mergeGscExport } from './imports.js';
@@ -19,7 +19,7 @@ const robotsParser = require('robots-parser') as (url: string, body: string) => 
 };
 
 export interface CrawlProgress {
-  phase: 'starting' | 'robots' | 'sitemaps' | 'crawling' | 'pagespeed' | 'keywords' | 'complete';
+  phase: 'starting' | 'robots' | 'sitemaps' | 'crawling' | 'external' | 'pagespeed' | 'keywords' | 'complete';
   message: string;
   fetched: number;
   analyzed: number;
@@ -82,7 +82,16 @@ export function validateConfig(config: AuditConfig): void {
   if (config.maxRankings !== undefined && (!Number.isInteger(config.maxRankings) || config.maxRankings < 0 || config.maxRankings > 100)) throw new Error('maxRankings must be an integer between 0 and 100.');
   if (config.maxDepth !== undefined && config.maxDepth !== null && (!Number.isInteger(config.maxDepth) || config.maxDepth < 0 || config.maxDepth > 50)) throw new Error('maxDepth must be null or an integer between 0 and 50.');
   if (config.maxUrlsPerPath !== undefined && (!Number.isInteger(config.maxUrlsPerPath) || config.maxUrlsPerPath < 10)) throw new Error('maxUrlsPerPath must be at least 10.');
+  if (config.externalCrawlDepth !== undefined && (!Number.isInteger(config.externalCrawlDepth) || config.externalCrawlDepth < 0 || config.externalCrawlDepth > 3)) throw new Error('externalCrawlDepth must be an integer between 0 and 3.');
+  if (config.maxExternalPages !== undefined && (!Number.isInteger(config.maxExternalPages) || config.maxExternalPages < 1 || config.maxExternalPages > 5000)) throw new Error('maxExternalPages must be between 1 and 5000.');
 }
+
+const safeExternalTarget = (url: string) => {
+  const host = new URL(url).hostname.toLowerCase();
+  return host !== 'localhost' && host !== '0.0.0.0' && host !== '::1'
+    && !/^127\./.test(host) && !/^10\./.test(host) && !/^192\.168\./.test(host)
+    && !/^169\.254\./.test(host) && !/^172\.(1[6-9]|2\d|3[01])\./.test(host);
+};
 
 async function loadRobots(origin: string, userAgent: string) {
   const robotsUrl = new URL('/robots.txt', origin).href;
@@ -266,6 +275,44 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     await Promise.all(batch.map(processUrl));
   }
 
+  const externalPages: ExternalPageResult[] = [];
+  const externalDepth = input.externalCrawlDepth ?? 0;
+  if (externalDepth > 0 && !control.isCancelled()) {
+    const externalLimit = input.maxExternalPages ?? 500;
+    const externalQueue: Array<{ url: string; depth: number; sourcePages: Set<string> }> = [];
+    const externalQueued = new Map<string, { url: string; depth: number; sourcePages: Set<string> }>();
+    const enqueueExternal = (url: string, depth: number, sourcePage: string) => {
+      if (depth > externalDepth || sameHost(url, startUrl) || !safeExternalTarget(url)) return;
+      const normalized = safeCrawlUrl(url, input.stripTrackingParameters !== false);
+      const existing = externalQueued.get(normalized);
+      if (existing) { existing.sourcePages.add(sourcePage); return; }
+      const item = { url: normalized, depth, sourcePages: new Set([sourcePage]) };
+      externalQueued.set(normalized, item); externalQueue.push(item);
+    };
+    for (const page of pages) for (const link of page.links.filter(link => !link.internal)) enqueueExternal(link.url, 1, page.url);
+    const externalRobots = new Map<string, Awaited<ReturnType<typeof loadRobots>>>();
+    while (externalQueue.length && externalPages.length < externalLimit && !control.isCancelled()) {
+      const batch = externalQueue.splice(0, Math.min(input.concurrency, externalLimit - externalPages.length));
+      await Promise.all(batch.map(async item => {
+        const targetOrigin = new URL(item.url).origin;
+        let rules = externalRobots.get(targetOrigin);
+        if (!rules) { rules = await loadRobots(targetOrigin, input.userAgent); externalRobots.set(targetOrigin, rules); }
+        const allowed = rules.parser.isAllowed(item.url, input.userAgent) !== false;
+        await onProgress({ phase: 'external', message: `Checking external link ${item.url}`, fetched: fetched.size, analyzed: pages.length, queued: externalQueue.length, currentUrl: item.url, percent: null });
+        if (!allowed) { externalPages.push({ url: item.url, finalUrl: item.url, depth: item.depth, status: null, contentType: '', responseTimeMs: null, redirectChain: [], sourcePages: [...item.sourcePages], robotsAllowed: false, error: 'Disallowed by external robots.txt' }); return; }
+        try {
+          const result = await fetchWithRedirects(item.url, input.userAgent);
+          const contentType = result.response.headers.get('content-type') ?? '';
+          externalPages.push({ url: item.url, finalUrl: result.finalUrl, depth: item.depth, status: result.response.status, contentType, responseTimeMs: result.responseTimeMs, redirectChain: result.redirectChain, sourcePages: [...item.sourcePages], robotsAllowed: true });
+          if (item.depth < externalDepth && result.response.ok && /text\/html|application\/xhtml\+xml/i.test(contentType)) {
+            const html = await result.response.text(); const $ = cheerio.load(html);
+            for (const href of $('a[href]').map((_, element) => normaliseUrl($(element).attr('href') ?? '', result.finalUrl)).get().filter(Boolean)) enqueueExternal(href, item.depth + 1, item.url);
+          }
+        } catch (error) { externalPages.push({ url: item.url, finalUrl: item.url, depth: item.depth, status: null, contentType: '', responseTimeMs: null, redirectChain: [], sourcePages: [...item.sourcePages], robotsAllowed: true, error: String(error) }); }
+      }));
+    }
+  }
+
   if (input.pageSpeed && !control.isCancelled()) {
     for (const [index, page] of pages.entries()) {
       await onProgress({ phase: 'pagespeed', message: `Running PageSpeed for ${page.url}`, fetched: fetched.size, analyzed: pages.length, queued: 0, currentUrl: page.url, percent: 92 + Math.round(((index + 1) / Math.max(1, pages.length)) * 5) });
@@ -302,11 +349,11 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     config: {
       startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords, maxRankings: input.maxRankings ?? 100,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
-      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), sitemapOnly: Boolean(input.sitemapOnly), excludeArchives: Boolean(input.excludeArchives), analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
+      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), sitemapOnly: Boolean(input.sitemapOnly), excludeArchives: Boolean(input.excludeArchives), externalCrawlDepth: externalDepth, maxExternalPages: input.maxExternalPages ?? 500, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,
-    redirects, brokenLinks,
+    redirects, brokenLinks, externalPages,
     pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
   };
   await renderedBrowser?.close();

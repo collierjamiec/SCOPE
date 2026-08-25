@@ -29,6 +29,7 @@ export function technicalCsv(report: AuditReport): string {
   const rows = [
     ...report.brokenLinks.map(link => ['broken_link', link.sourcePage, link.anchorText, link.destination, link.status ?? '', '', link.error]),
     ...report.redirects.map(redirect => ['redirect', redirect.source, '', redirect.finalUrl, redirect.finalStatus, redirect.chain.join(' → '), `Linked from: ${redirect.sourcePages.join(' | ') || 'Seed or sitemap'}`]),
+    ...(report.externalPages ?? []).map(page => [`external_depth_${page.depth}`, page.sourcePages.join(' | '), '', page.url, page.status ?? '', page.redirectChain.join(' → '), page.error ?? `Final URL: ${page.finalUrl}; ${page.responseTimeMs ?? 'n/a'} ms`]),
     ...report.excludedPages.map(item => ['excluded', '', '', item.url, item.status ?? '', '', item.reason])
   ];
   return [header, ...rows].map(row => row.map(csv).join(',')).join('\n') + '\n';
