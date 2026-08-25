@@ -9,6 +9,7 @@ import { getRankings, HttpSerpProvider } from './serp.js';
 import { enrichImageRecommendations } from './image-analysis.js';
 import { normaliseUrl, sameHost } from './util.js';
 import { buildPriorities } from './priorities.js';
+import { resolve } from 'node:path';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const require = createRequire(import.meta.url);
@@ -28,6 +29,7 @@ export interface CrawlProgress {
 }
 
 export type ProgressReporter = (progress: CrawlProgress) => void | Promise<void>;
+export interface CrawlControl { isPaused(): boolean; isCancelled(): boolean }
 
 export function isExcludedUrl(url: string, patterns: string[] = []): boolean {
   const candidate = new URL(url);
@@ -129,7 +131,7 @@ async function inspectSitemaps(origin: string, listed: string[], userAgent: stri
   return { results, pageUrls: [...pageUrls] };
 }
 
-export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter = () => {}): Promise<AuditReport> {
+export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter = () => {}, control: CrawlControl = { isPaused: () => false, isCancelled: () => false }): Promise<AuditReport> {
   validateConfig(input);
   const startUrl = normaliseUrl(input.startUrl)!;
   const origin = new URL(startUrl).origin;
@@ -148,9 +150,20 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const excluded: AuditReport['excludedPages'] = [];
   const configuredExclusions = input.excludePaths ?? [];
   const pathCounts = new Map<string, number>();
+  let renderedBrowser: import('playwright').Browser | undefined;
+  const renderedHtml = async (url: string) => {
+    process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve('.playwright-browsers');
+    const { chromium } = await import('playwright');
+    renderedBrowser ??= await chromium.launch({ headless: true });
+    const browserPage = await renderedBrowser.newPage({ userAgent: input.userAgent });
+    try { await browserPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 }); await browserPage.waitForTimeout(750); return await browserPage.content(); }
+    finally { await browserPage.close(); }
+  };
   await onProgress({ phase: 'sitemaps', message: `Discovered ${sitemapInfo.pageUrls.length} sitemap URLs`, fetched: 0, analyzed: 0, queued: queue.length, percent: input.maxPages ? 2 : null });
 
   while (queue.length && (input.maxPages === null || fetched.size < input.maxPages)) {
+    while (control.isPaused() && !control.isCancelled()) { await onProgress({ phase: 'crawling', message: 'Crawl paused', fetched: fetched.size, analyzed: pages.length, queued: queue.length, percent: null }); await sleep(250); }
+    if (control.isCancelled()) break;
     const url = queue.shift()!;
     if (fetched.has(url)) continue;
     if (isExcludedUrl(url, configuredExclusions)) { excluded.push({ url, reason: 'Excluded by audit configuration' }); continue; }
@@ -172,8 +185,11 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       if (!sameHost(finalUrl, startUrl)) { excluded.push({ url, reason: `Redirected outside the audited domain: ${finalUrl}`, status: response.status }); continue; }
       const contentType = response.headers.get('content-type') ?? '';
       if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) { excluded.push({ url: finalUrl, reason: 'Non-HTML content', status: response.status }); continue; }
-      const html = await response.text();
+      const rawHtml = await response.text();
+      let html = rawHtml, renderError = '';
+      if (input.renderJavaScript) try { html = await renderedHtml(finalUrl); } catch (error) { renderError = String(error); }
       const page = extractPage(url, finalUrl, response.status, contentType, html, response.headers, redirectChain, responseTimeMs);
+      if (renderError) page.findings.push({ category: 'seo', severity: 'warning', rule: 'javascript_render_failed', message: `JavaScript rendering failed; raw HTML was analyzed. ${renderError}` });
       if (input.analyzeImages !== false) await enrichImageRecommendations(page, input.imageAnalysis);
       else {
         page.imageRecommendations = [];
@@ -196,7 +212,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     } catch (error) { excluded.push({ url, reason: `Fetch error: ${String(error)}` }); }
   }
 
-  if (input.pageSpeed) {
+  if (input.pageSpeed && !control.isCancelled()) {
     for (const [index, page] of pages.entries()) {
       await onProgress({ phase: 'pagespeed', message: `Running PageSpeed for ${page.url}`, fetched: fetched.size, analyzed: pages.length, queued: 0, currentUrl: page.url, percent: 92 + Math.round(((index + 1) / Math.max(1, pages.length)) * 5) });
       page.pageSpeed = [await fetchPageSpeed(page.url, input.pageSpeedApiKey)];
@@ -231,13 +247,14 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     config: {
       startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords, maxRankings: input.maxRankings ?? 100,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
-      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
+      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,
     redirects, brokenLinks,
-    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString()
+    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
   };
+  await renderedBrowser?.close();
   await onProgress({ phase: 'complete', message: 'Audit complete', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 100 });
   return report;
 }

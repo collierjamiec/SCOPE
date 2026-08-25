@@ -24,6 +24,7 @@ export interface AuditConfig {
   maxDepth?: number | null;
   maxUrlsPerPath?: number;
   stripTrackingParameters?: boolean;
+  renderJavaScript?: boolean;
 }
 
 export interface ImageAnalysisConfig {
@@ -107,6 +108,17 @@ export interface PageSpeedResult {
   error?: string;
 }
 
+export interface ContentMetrics {
+  wordCount: number;
+  sentenceCount: number;
+  paragraphCount: number;
+  averageWordsPerSentence: number;
+  fleschReadingEase: number | null;
+  fleschKincaidGrade: number | null;
+  readingTimeMinutes: number;
+  textToHtmlRatio: number;
+}
+
 export interface KeywordCandidate {
   keyword: string;
   score: number;
@@ -154,6 +166,7 @@ export interface PageResult {
   schemas: SchemaMarkup[];
   suggestedSchemas: SuggestedSchema[];
   wordCount: number;
+  contentMetrics: ContentMetrics;
   text: string;
   links: LinkInfo[];
   internalLinkCount: number;
@@ -203,6 +216,7 @@ export interface AuditReport {
   importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number };
   priorities: Array<{ rank: number; area: string; issue: string; impact: 'high' | 'medium' | 'low'; effort: 'low' | 'medium' | 'high'; affectedPages: number; recommendation: string }>;
   generatedAt: string;
+  partial?: boolean;
 }
 
 export interface RedirectResult {

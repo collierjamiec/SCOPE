@@ -3,7 +3,7 @@ import type { AuditReport } from './types.js';
 const csv = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 
 export function pagesCsv(report: AuditReport): string {
-  const header = ['URL','Status','Response Time Ms','Redirect Chain','Internal Links','External Links','Incoming Internal Links','GA4 Sessions','GA4 Active Users','GA4 Engaged Sessions','GA4 Engagement Rate','GA4 Key Events','Images','Images Missing Alt Text','AIO Readiness Score','AIO Readiness Label','AIO Extractability','AIO Evidence','AIO Entity Clarity','AIO Intent Coverage','AIO Freshness','AIO Multimodal','HTML Lang','Viewport Meta','Canonical','Canonical Matches URL','SEO Title','Title Characters','Meta Description','Meta Description Characters','H1','H2s','Primary CTA','CTA URL','Detected Schema Types','Suggested Schema Types','Word Count','Findings'];
+  const header = ['URL','Status','Response Time Ms','Redirect Chain','Internal Links','External Links','Incoming Internal Links','GA4 Sessions','GA4 Active Users','GA4 Engaged Sessions','GA4 Engagement Rate','GA4 Key Events','Images','Images Missing Alt Text','AIO Readiness Score','AIO Readiness Label','AIO Extractability','AIO Evidence','AIO Entity Clarity','AIO Intent Coverage','AIO Freshness','AIO Multimodal','HTML Lang','Viewport Meta','Canonical','Canonical Matches URL','SEO Title','Title Characters','Meta Description','Meta Description Characters','H1','H2s','Primary CTA','CTA URL','Detected Schema Types','Suggested Schema Types','Word Count','Sentence Count','Paragraph Count','Average Words Per Sentence','Flesch Reading Ease','Flesch-Kincaid Grade','Reading Time Minutes','Text to HTML Ratio','Findings'];
   const rows = report.pages.map(page => [
     page.url, page.status, page.responseTimeMs ?? '', page.redirectChain.join(' → '), page.internalLinkCount, page.externalLinkCount,
     page.incomingInternalLinks, page.analytics?.sessions ?? '', page.analytics?.activeUsers ?? '', page.analytics?.engagedSessions ?? '', page.analytics?.engagementRate ?? '', page.analytics?.keyEvents ?? '', page.imageCount, page.imagesMissingAltText,
@@ -12,7 +12,7 @@ export function pagesCsv(report: AuditReport): string {
     page.canonical ?? '', page.canonicalMatchesUrl ?? '',
     page.title, page.titleCharacters, page.metaDescription, page.metaDescriptionCharacters,
     page.h1s.join(' | '), page.h2s.join(' | '), page.primaryCta?.text ?? '', page.primaryCta?.url ?? '',
-    page.schemas.flatMap(schema => schema.types).join(' | '), page.suggestedSchemas.map(schema => schema.type).join(' | '), page.wordCount,
+    page.schemas.flatMap(schema => schema.types).join(' | '), page.suggestedSchemas.map(schema => schema.type).join(' | '), page.wordCount, page.contentMetrics.sentenceCount, page.contentMetrics.paragraphCount, page.contentMetrics.averageWordsPerSentence, page.contentMetrics.fleschReadingEase ?? '', page.contentMetrics.fleschKincaidGrade ?? '', page.contentMetrics.readingTimeMinutes, page.contentMetrics.textToHtmlRatio,
     page.findings.map(finding => `${finding.severity}: ${finding.message}`).join(' | ')
   ]);
   return [header, ...rows].map(row => row.map(csv).join(',')).join('\n') + '\n';

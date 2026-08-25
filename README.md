@@ -19,6 +19,7 @@ SCOPE means **Search & Content Optimization Performance Engine**. It distinguish
 - Attributes internal 4xx/5xx destinations back to every source page and anchor text, and reports redirect sources, full chains, and final status in the dashboard, document, JSON, and `technical.csv`.
 - Accepts manual path-prefix exclusions. `/blog` excludes both `/blog` and descendants such as `/blog/article-name`; patterns are site-specific and are never assumed automatically.
 - Reports each page's HTTP status plus unique internal and external link counts.
+- Measures word, sentence, and paragraph counts, average sentence length, reading time, text-to-HTML ratio, Flesch Reading Ease, and Flesch-Kincaid grade level.
 - Flags missing alt text and generic/unoptimized image filenames, then recommends an SEO-friendly filename and concise alt text using the page's subject and keyword targets.
 - Scores AI answer readiness across crawler/snippet accessibility (20), answer extractability (20), evidence and citation readiness (20), entity clarity (15), intent coverage (15), freshness (5), and multimodal accessibility (5).
 - Checks robots access for OAI-SearchBot, Googlebot, and Bingbot; detects restrictive snippet controls; inventories question-led headings, answer passages, structured formats, authorship, dates, source links, and semantic/schema signals.
@@ -30,8 +31,11 @@ SCOPE means **Search & Content Optimization Performance Engine**. It distinguish
 
 ```bash
 npm install
+PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers npx playwright install chromium
 npm run dev -- --url https://example.com
 ```
+
+JavaScript rendering is optional in dashboard settings or with `--render-js`; it uses the locally installed Playwright Chromium runtime and is slower than raw-HTML crawling.
 
 Or launch the browser dashboard:
 

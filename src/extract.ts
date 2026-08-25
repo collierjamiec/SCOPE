@@ -3,6 +3,7 @@ import type { CtaInfo, Finding, Heading, ImageRecommendation, LinkInfo, PageResu
 import { cleanText, normaliseUrl, sameHost } from './util.js';
 import { extractKeywordSignals } from './keywords.js';
 import { assessAio } from './aio.js';
+import { measureReadability } from './readability.js';
 
 function schemaTypes(value: unknown): string[] {
   if (!value || typeof value !== 'object') return [];
@@ -106,6 +107,8 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     catch (error) { return { raw, parsed: null, types: [], validJson: false, error: String(error) }; }
   }).get();
   const text = cleanText($('main').first().text() || $('body').text());
+  const paragraphCount = $('main p,article p').filter((_, paragraph) => cleanText($(paragraph).text()).length > 0).length;
+  const contentMetrics = measureReadability(text, html, paragraphCount);
   const links: LinkInfo[] = $('a[href]').map((_, el) => {
     const url = normaliseUrl($(el).attr('href') ?? '', finalUrl);
     return url ? { text: cleanText($(el).text()), url, internal: sameHost(url, finalUrl) } : null;
@@ -140,11 +143,11 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
       basis: 'page_context'
     } satisfies ImageRecommendation;
   }).get().filter(Boolean) as ImageRecommendation[];
-  const base = { title, metaDescription, metaDescriptionCharacters: [...metaDescription].length, h1s, h2s, schemas, wordCount: text ? text.split(/\s+/).length : 0, canonical };
+  const base = { title, metaDescription, metaDescriptionCharacters: [...metaDescription].length, h1s, h2s, schemas, wordCount: contentMetrics.wordCount, canonical };
   const result: PageResult = {
     requestedUrl, url: finalUrl, status, redirectChain, contentType, ...base,
     titleCharacters: [...title].length, robotsDirectives, indexable, headings,
-    primaryCta: findCta($, finalUrl), text, links,
+    primaryCta: findCta($, finalUrl), text, links, contentMetrics,
     internalLinkCount: uniqueInternalLinks.size, externalLinkCount: uniqueExternalLinks.size,
     incomingInternalLinks: 0, imageCount, imagesMissingAltText, imageRecommendations, htmlLang, hasViewportMeta,
     canonicalMatchesUrl: canonical ? canonical === finalUrl : null, responseTimeMs,
@@ -163,6 +166,8 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   if (!htmlLang) result.findings.push({ category: 'seo', severity: 'info', rule: 'html_lang_missing', message: 'The HTML lang attribute is missing.' });
   if (imageCount && imagesMissingAltText) result.findings.push({ category: 'seo', severity: 'warning', rule: 'image_alt_missing', message: `${imagesMissingAltText} of ${imageCount} images have empty or missing alt text; decorative images should use an intentional empty alt attribute.` });
   if (canonical && canonical !== finalUrl) result.findings.push({ category: 'seo', severity: 'info', rule: 'canonical_differs', message: `Canonical points to a different URL: ${canonical}` });
+  if (contentMetrics.fleschKincaidGrade !== null && contentMetrics.fleschKincaidGrade > 12) result.findings.push({ category: 'geo', severity: 'info', rule: 'readability_difficult', message: `Flesch-Kincaid grade level is ${contentMetrics.fleschKincaidGrade}; consider simplifying copy where a broad audience is intended.` });
+  if (contentMetrics.averageWordsPerSentence > 25) result.findings.push({ category: 'geo', severity: 'info', rule: 'long_sentences', message: `Average sentence length is ${contentMetrics.averageWordsPerSentence} words; shorter sentences may improve scanability.` });
   for (const indicator of result.aio.indicators.filter(item => item.status !== 'pass')) {
     result.findings.push({ category: 'aio', severity: indicator.status === 'blocked' ? 'critical' : 'info', rule: `aio_${indicator.key}`, message: `${indicator.label}: ${indicator.recommendation ?? indicator.evidence}`, evidence: indicator.evidence });
   }
