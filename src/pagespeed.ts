@@ -1,4 +1,11 @@
 import type { PageSpeedResult } from './types.js';
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+
+const pageSpeedKeyPath = () => process.env.SCOPE_PAGESPEED_KEY_FILE ?? join(process.env.SCOPE_DATA_DIR ?? resolve(process.cwd(), '.scope'), 'pagespeed.json');
+export async function loadPageSpeedApiKey(): Promise<string | undefined> { try { return String(JSON.parse(await readFile(pageSpeedKeyPath(), 'utf8')).apiKey || '') || undefined; } catch { return undefined; } }
+export async function savePageSpeedApiKey(apiKey: string): Promise<void> { const path = pageSpeedKeyPath(), temporary = `${path}.${process.pid}.tmp`; await mkdir(dirname(path), { recursive: true, mode: 0o700 }); await writeFile(temporary, `${JSON.stringify({ apiKey }, null, 2)}\n`, { mode: 0o600 }); await chmod(temporary, 0o600); await rename(temporary, path); await chmod(path, 0o600); }
+export async function removePageSpeedApiKey(): Promise<void> { try { await unlink(pageSpeedKeyPath()); } catch { /* Already absent. */ } }
 
 export function parsePageSpeedResponse(data: any): PageSpeedResult {
   const result: PageSpeedResult = { strategy: 'mobile', performance: null, accessibility: null, bestPractices: null, seo: null, metrics: {}, fieldMetrics: {} };
@@ -19,7 +26,18 @@ export function parsePageSpeedResponse(data: any): PageSpeedResult {
   return result;
 }
 
-export async function fetchPageSpeed(url: string, apiKey?: string): Promise<PageSpeedResult> {
+type PageSpeedFetchOptions = { maxRetries?: number; sleep?: (milliseconds: number) => Promise<void> };
+
+const retryDelay = (response: Response, attempt: number): number => {
+  const header = response.headers.get('retry-after');
+  if (header) {
+    const seconds = Number(header); if (Number.isFinite(seconds)) return Math.min(60_000, Math.max(1_000, seconds * 1000));
+    const date = new Date(header).valueOf(); if (Number.isFinite(date)) return Math.min(60_000, Math.max(1_000, date - Date.now()));
+  }
+  return [2_000, 5_000, 15_000, 30_000][attempt] ?? 30_000;
+};
+
+export async function fetchPageSpeed(url: string, apiKey?: string, options: PageSpeedFetchOptions = {}): Promise<PageSpeedResult> {
   let result: PageSpeedResult = { strategy: 'mobile', performance: null, accessibility: null, bestPractices: null, seo: null, metrics: {}, fieldMetrics: {} };
   try {
     const endpoint = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
@@ -27,9 +45,20 @@ export async function fetchPageSpeed(url: string, apiKey?: string): Promise<Page
     endpoint.searchParams.set('strategy', 'mobile');
     for (const category of ['performance', 'accessibility', 'best-practices', 'seo']) endpoint.searchParams.append('category', category);
     if (apiKey) endpoint.searchParams.set('key', apiKey);
-    const response = await fetch(endpoint);
-    if (!response.ok) throw new Error(`PageSpeed returned HTTP ${response.status}`);
-    result = parsePageSpeedResponse(await response.json());
-  } catch (error) { result.error = String(error); }
+    const maximumRetries = options.maxRetries ?? 3, sleep = options.sleep ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)));
+    for (let attempt = 0; ; attempt += 1) {
+      const response = await fetch(endpoint);
+      if (response.ok) { result = parsePageSpeedResponse(await response.json()); break; }
+      const retryable = response.status === 429 || [500, 502, 503, 504].includes(response.status);
+      if (retryable && attempt < maximumRetries) { await sleep(retryDelay(response, attempt)); continue; }
+      if (response.status === 429) {
+        result.errorCode = 'rate_limited';
+        result.error = `Google PageSpeed quota or rate limit was exhausted (HTTP 429) after ${attempt + 1} attempt(s). Verify PAGESPEED_API_KEY quota or retry the audit later.`;
+      } else {
+        result.errorCode = 'http_error'; result.error = `PageSpeed returned HTTP ${response.status}.`;
+      }
+      break;
+    }
+  } catch (error) { result.errorCode = 'network_error'; result.error = `PageSpeed request failed: ${error instanceof Error ? error.message : String(error)}`; }
   return result;
 }

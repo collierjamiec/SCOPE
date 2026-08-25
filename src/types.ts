@@ -126,6 +126,7 @@ export interface PageSpeedResult {
   metrics: Record<string, number | null>;
   fieldMetrics?: Record<string, { percentile: number | null; category: string | null }>;
   error?: string;
+  errorCode?: "rate_limited" | "http_error" | "network_error" | "skipped_after_rate_limit";
 }
 
 export interface ContentMetrics {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePageSpeedResponse } from '../src/pagespeed.js';
+import { fetchPageSpeed, parsePageSpeedResponse } from '../src/pagespeed.js';
 
 test('captures Lighthouse scores, lab metrics, and available field data', () => {
     const result = parsePageSpeedResponse({
@@ -29,4 +29,16 @@ test('captures Lighthouse scores, lab metrics, and available field data', () => 
   assert.deepEqual(result.fieldMetrics?.lcp, { percentile: 2300, category: 'FAST' });
   assert.deepEqual(result.fieldMetrics?.inp, { percentile: 190, category: 'FAST' });
   assert.deepEqual(result.fieldMetrics?.fcp, { percentile: null, category: null });
+});
+
+test('retries PageSpeed 429 responses using Retry-After and returns a classified quota error', async () => {
+  const original = globalThis.fetch; let calls = 0; const waits: number[] = [];
+  globalThis.fetch = (async () => { calls += 1; return new Response('{}', { status: 429, headers: { 'retry-after': '2' } }); }) as typeof fetch;
+  try {
+    const result = await fetchPageSpeed('https://example.com/', undefined, { maxRetries: 1, sleep: async milliseconds => { waits.push(milliseconds); } });
+    assert.equal(calls, 2);
+    assert.deepEqual(waits, [2000]);
+    assert.equal(result.errorCode, 'rate_limited');
+    assert.match(result.error ?? '', /HTTP 429/);
+  } finally { globalThis.fetch = original; }
 });

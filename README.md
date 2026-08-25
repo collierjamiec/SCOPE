@@ -174,9 +174,11 @@ SCOPE does not send reports by email. Users download the PDF and share it throug
 
 ### PageSpeed Insights
 
-PageSpeed is disabled by default because it runs a separate Google PageSpeed Insights request for every analyzed page, which adds time and may be quota-limited. Open **Settings → Performance & PageSpeed** to enable it, or pass `--pagespeed` on the CLI. Set `PAGESPEED_API_KEY` for larger audits.
+PageSpeed is disabled by default because it runs a separate Google PageSpeed Insights request for every analyzed page, which adds time and may be quota-limited. Open **Settings → Performance & PageSpeed** to enable it, or pass `--pagespeed` on the CLI. For larger audits, save a Google PageSpeed API key locally in that settings panel or set `PAGESPEED_API_KEY`. The locally saved key is stored at `.scope/pagespeed.json` with owner-only permissions and is excluded from Git and reports.
 
 When enabled, the dashboard adds a dedicated **PageSpeed** report with sortable, searchable per-page results: mobile Lighthouse performance, accessibility, best-practices and SEO scores; lab LCP, CLS, TBT, FCP and Speed Index; request errors; and field LCP, CLS and INP from Chrome UX Report data when Google has enough real-user observations. Lab and field data are identified separately.
+
+PageSpeed requests are paced and transient HTTP 429/5xx responses are retried with exponential backoff or Google’s `Retry-After` instruction. If Google’s quota remains exhausted, SCOPE classifies the condition as a quota/rate-limit event and skips the remaining PageSpeed calls instead of repeatedly failing every page. Configure `PAGESPEED_API_KEY` with available quota for large, exhaustive audits.
 
 ### Licensed SERP provider
 

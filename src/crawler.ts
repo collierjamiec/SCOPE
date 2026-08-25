@@ -345,9 +345,16 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   }
 
   if (input.pageSpeed && !control.isCancelled()) {
+    let pageSpeedRateLimited = false;
     for (const [index, page] of pages.entries()) {
       await onProgress({ phase: 'pagespeed', message: `Running PageSpeed for ${page.url}`, fetched: fetched.size, analyzed: pages.length, queued: 0, currentUrl: page.url, percent: 92 + Math.round(((index + 1) / Math.max(1, pages.length)) * 5) });
-      page.pageSpeed = [await fetchPageSpeed(page.url, input.pageSpeedApiKey)];
+      if (pageSpeedRateLimited) {
+        page.pageSpeed = [{ strategy: 'mobile', performance: null, accessibility: null, bestPractices: null, seo: null, metrics: {}, fieldMetrics: {}, errorCode: 'skipped_after_rate_limit', error: 'Skipped because Google PageSpeed quota was exhausted earlier in this audit. Retry later or configure PAGESPEED_API_KEY with available quota.' }];
+        continue;
+      }
+      if (index > 0) await new Promise(resolve => setTimeout(resolve, 1_100));
+      const speed = await fetchPageSpeed(page.url, input.pageSpeedApiKey); page.pageSpeed = [speed];
+      if (speed.errorCode === 'rate_limited') pageSpeedRateLimited = true;
     }
   }
   const pageByUrl = new Map(pages.map(page => [page.url, page]));
