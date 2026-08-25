@@ -19,6 +19,7 @@ export interface AuditConfig {
   analyzeSchema?: boolean;
   /** Raw exports are consumed locally and omitted from the persisted report config. */
   gscCsv?: string;
+  gscQueryPageCsv?: string;
   ga4Csv?: string;
   /** Safety controls for unlimited and highly faceted sites. */
   maxDepth?: number | null;
@@ -55,6 +56,13 @@ export interface ImageRecommendation {
   suggestedFilename: string;
   basis: "vision" | "page_context";
   visualDescription?: string;
+}
+
+export interface ImageInventoryItem {
+  src: string;
+  alt: string;
+  filename: string;
+  cdnManaged: boolean;
 }
 
 export interface AioIndicator {
@@ -178,6 +186,7 @@ export interface PageResult {
   incomingInternalLinks: number;
   imageCount: number;
   imagesMissingAltText: number;
+  images: ImageInventoryItem[];
   imageRecommendations: ImageRecommendation[];
   aio: AioAssessment;
   htmlLang: string | null;
@@ -200,7 +209,7 @@ export interface CannibalizationIssue {
 
 export interface AuditReport {
   domain: string;
-  config: Omit<AuditConfig, "pageSpeedApiKey" | "serp" | "imageAnalysis" | "gscCsv" | "ga4Csv"> & { serpConfigured: boolean; imageAnalysisConfigured: boolean };
+  config: Omit<AuditConfig, "pageSpeedApiKey" | "serp" | "imageAnalysis" | "gscCsv" | "gscQueryPageCsv" | "ga4Csv"> & { serpConfigured: boolean; imageAnalysisConfigured: boolean };
   summary: {
     pagesFetched: number;
     indexablePagesAnalyzed: number;

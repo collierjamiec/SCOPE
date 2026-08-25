@@ -122,15 +122,25 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const preliminarySignals = extractKeywordSignals(title, metaDescription, h1s, h2s, text);
   const primaryKeyword = preliminarySignals.find(signal => signal.phrase.split(' ').length > 1)?.phrase ?? (cleanText(h1s[0] || title) || 'website image');
   const slug = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+  const images = $('img[src]').map((_, image) => {
+    const src = normaliseUrl($(image).attr('src') ?? '', finalUrl);
+    if (!src) return null;
+    const detected = decodeURIComponent(new URL(src).pathname.split('/').pop() || 'image');
+    const cdnManaged = !/\.[a-z0-9]{2,5}$/i.test(detected) && /^[a-f0-9_-]{20,}$/i.test(detected);
+    return { src, alt: cleanText($(image).attr('alt')), filename: cdnManaged ? '[CDN-generated asset identifier]' : detected, cdnManaged };
+  }).get().filter(Boolean);
   const imageRecommendations: ImageRecommendation[] = $('img[src]').map((_, image) => {
     const element = $(image);
     const src = normaliseUrl(element.attr('src') ?? '', finalUrl);
     if (!src) return null;
     const currentAlt = cleanText(element.attr('alt'));
-    const currentFilename = decodeURIComponent(new URL(src).pathname.split('/').pop() || 'image');
-    const stem = currentFilename.replace(/\.[^.]+$/, '');
-    const extension = (currentFilename.match(/\.[a-z0-9]{2,5}$/i)?.[0] ?? '.webp').toLowerCase();
-    const unoptimized = !stem || /^(img|image|photo|pic|dsc|untitled|screenshot)[-_ ]?\d*$/i.test(stem) || /^[a-f0-9_-]{12,}$/i.test(stem) || /\s|_/.test(stem);
+    const detectedFilename = decodeURIComponent(new URL(src).pathname.split('/').pop() || 'image');
+    const hasExtension = /\.[a-z0-9]{2,5}$/i.test(detectedFilename);
+    const opaqueCdnAsset = !hasExtension && /^[a-f0-9_-]{20,}$/i.test(detectedFilename);
+    const currentFilename = opaqueCdnAsset ? '[CDN-generated asset identifier]' : detectedFilename;
+    const stem = detectedFilename.replace(/\.[^.]+$/, '');
+    const extension = (detectedFilename.match(/\.[a-z0-9]{2,5}$/i)?.[0] ?? '.webp').toLowerCase();
+    const unoptimized = !opaqueCdnAsset && (!stem || /^(img|image|photo|pic|dsc|untitled|screenshot)[-_ ]?\d*$/i.test(stem) || /^[a-f0-9_-]{12,}$/i.test(stem) || /\s|_/.test(stem));
     if (currentAlt && !unoptimized) return null;
     const context = cleanText(element.closest('figure').find('figcaption').first().text() || element.parent().text() || element.attr('title')).slice(0, 180);
     const subject = context || primaryKeyword;
@@ -139,7 +149,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
       src, currentAlt, currentFilename,
       issue: !currentAlt && unoptimized ? 'both' : !currentAlt ? 'missing_alt' : 'unoptimized_filename',
       suggestedAlt,
-      suggestedFilename: `${slug(`${primaryKeyword}-${subject}`) || 'descriptive-image'}${extension}`,
+      suggestedFilename: opaqueCdnAsset ? 'CDN-managed — rename not applicable' : `${slug(`${primaryKeyword}-${subject}`) || 'descriptive-image'}${extension}`,
       basis: 'page_context'
     } satisfies ImageRecommendation;
   }).get().filter(Boolean) as ImageRecommendation[];
@@ -149,7 +159,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     titleCharacters: [...title].length, robotsDirectives, indexable, headings,
     primaryCta: findCta($, finalUrl), text, links, contentMetrics,
     internalLinkCount: uniqueInternalLinks.size, externalLinkCount: uniqueExternalLinks.size,
-    incomingInternalLinks: 0, imageCount, imagesMissingAltText, imageRecommendations, htmlLang, hasViewportMeta,
+    incomingInternalLinks: 0, imageCount, imagesMissingAltText, images, imageRecommendations, htmlLang, hasViewportMeta,
     canonicalMatchesUrl: canonical ? canonical === finalUrl : null, responseTimeMs,
     suggestedSchemas: [],
     aio: assessAio({

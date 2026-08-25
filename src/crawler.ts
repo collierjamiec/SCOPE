@@ -44,7 +44,7 @@ export function isExcludedUrl(url: string, patterns: string[] = []): boolean {
   });
 }
 
-const trackingParameters = /^(utm_.+|gclid|fbclid|msclkid|dclid|mc_cid|mc_eid)$/i;
+const trackingParameters = /^(utm_.+|gclid|fbclid|msclkid|dclid|mc_cid|mc_eid|share|replytocom)$/i;
 export function safeCrawlUrl(url: string, stripTracking = true): string {
   const candidate = new URL(url);
   candidate.hash = '';
@@ -281,7 +281,8 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   }
   await onProgress({ phase: 'keywords', message: 'Scoring keyword targets and checking cannibalization', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98 });
   const keywords = aggregateKeywords(pages, input.maxKeywords);
-  const gscRows = mergeGscExport(keywords, input.gscCsv, input.maxKeywords, startUrl);
+  const gscRows = mergeGscExport(keywords, input.gscCsv, input.maxKeywords, startUrl)
+    + mergeGscExport(keywords, input.gscQueryPageCsv, input.maxKeywords, startUrl);
   const ga4Rows = applyGa4Export(pages, input.ga4Csv, startUrl);
   const rankingCandidates = keywords.slice(0, input.maxRankings ?? 100);
   if (input.serp && rankingCandidates.length) applyRankings(rankingCandidates, await getRankings(new HttpSerpProvider(input.serp), rankingCandidates, new URL(startUrl).hostname));

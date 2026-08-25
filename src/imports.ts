@@ -16,8 +16,16 @@ function parseCsv(input: string): Row[] {
   }
   row.push(value); if (row.some(cell => cell.trim())) table.push(row);
   if (table.length < 2) return [];
-  const headers = table[0].map(header => header.trim().toLowerCase().replace(/[^a-z0-9]+/g, ''));
-  return table.slice(1).map(values => Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() ?? ''])));
+  const normalize = (header: string) => header.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const headerIndex = table.findIndex(candidate => {
+    const cells = candidate.map(normalize);
+    const dimension = cells.some(cell => ['query', 'queries', 'topqueries', 'page', 'pages', 'toppages', 'landingpage', 'landingpagequerystring', 'pagepath', 'pagepathquerystring'].includes(cell));
+    const metric = cells.some(cell => ['clicks', 'impressions', 'sessions', 'activeusers', 'engagedsessions', 'engagementrate'].includes(cell));
+    return dimension && metric;
+  });
+  if (headerIndex < 0 || headerIndex >= table.length - 1) return [];
+  const headers = table[headerIndex].map(normalize);
+  return table.slice(headerIndex + 1).map(values => Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() ?? ''])));
 }
 
 const number = (value = '') => Number(value.replace(/[%,$]/g, '').replaceAll(',', '')) || 0;
@@ -53,7 +61,7 @@ export function applyGa4Export(pages: PageResult[], csv: string | undefined, ori
   if (!csv?.trim()) return 0;
   const rows = parseCsv(csv); const pageMap = new Map(pages.map(page => [new URL(page.url).pathname.replace(/\/$/, '') || '/', page]));
   for (const row of rows) {
-    const rawPath = field(row, ['landingpage', 'landingpagequerystring', 'pagepath', 'pagepathquerystring', 'page']); if (!rawPath) continue;
+    const rawPath = field(row, ['landingpage', 'landingpagequerystring', 'pagepath', 'pagepathquerystring', 'page']); if (!rawPath || rawPath === '(not set)') continue;
     let path: string; try { path = new URL(rawPath, origin).pathname.replace(/\/$/, '') || '/'; } catch { continue; }
     const page = pageMap.get(path); if (!page) continue;
     page.analytics = {

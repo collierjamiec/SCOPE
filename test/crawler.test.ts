@@ -14,6 +14,7 @@ test('accepts thousands of discovered keywords while limiting ranking checks', (
 
 test('normalizes tracking parameters before queueing crawl URLs', () => {
   assert.equal(safeCrawlUrl('https://example.test/a?utm_source=x&b=2&a=1#section'), 'https://example.test/a?a=1&b=2');
+  assert.equal(safeCrawlUrl('https://example.test/article?share=twitter'), 'https://example.test/article');
 });
 
 test('path exclusions match a section and its descendants without matching similar slugs', () => {

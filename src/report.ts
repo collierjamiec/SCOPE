@@ -28,7 +28,7 @@ export function technicalCsv(report: AuditReport): string {
   const header = ['Type','Source Page','Anchor Text','Destination','HTTP Status','Redirect Chain','Details'];
   const rows = [
     ...report.brokenLinks.map(link => ['broken_link', link.sourcePage, link.anchorText, link.destination, link.status ?? '', '', link.error]),
-    ...report.redirects.flatMap(redirect => (redirect.sourcePages.length ? redirect.sourcePages : ['']).map(sourcePage => ['redirect', sourcePage, '', redirect.source, redirect.finalStatus, redirect.chain.join(' → '), `Final URL: ${redirect.finalUrl}`])),
+    ...report.redirects.map(redirect => ['redirect', redirect.source, '', redirect.finalUrl, redirect.finalStatus, redirect.chain.join(' → '), `Linked from: ${redirect.sourcePages.join(' | ') || 'Seed or sitemap'}`]),
     ...report.excludedPages.map(item => ['excluded', '', '', item.url, item.status ?? '', '', item.reason])
   ];
   return [header, ...rows].map(row => row.map(csv).join(',')).join('\n') + '\n';
@@ -44,10 +44,17 @@ export function keywordsCsv(report: AuditReport): string {
 }
 
 export function imagesCsv(report: AuditReport): string {
-  const header = ['Page URL','Image URL','Current Filename','Current Alt','Issue','Recommendation Basis','Suggested Filename','Suggested Alt Text','Visual Description'];
-  const rows = report.pages.flatMap(page => page.imageRecommendations.map(image => [
-    page.url, image.src, image.currentFilename, image.currentAlt, image.issue, image.basis,
-    image.suggestedFilename, image.suggestedAlt, image.visualDescription ?? ''
-  ]));
+  const header = ['Image URL','Pages Used','Occurrences','Current Filename or Asset ID','Current Alt','CDN Managed','Issue','Recommendation Basis','Suggested Filename','Suggested Alt Text','Visual Description'];
+  const inventory = new Map<string, { pages: Set<string>; occurrences: number; filename: string; alt: string; cdnManaged: boolean; recommendation?: import('./types.js').ImageRecommendation }>();
+  for (const page of report.pages) for (const image of page.images ?? []) {
+    const item = inventory.get(image.src) ?? { pages: new Set<string>(), occurrences: 0, filename: image.filename, alt: image.alt, cdnManaged: image.cdnManaged };
+    item.pages.add(page.url); item.occurrences += 1;
+    item.recommendation ??= page.imageRecommendations.find(candidate => candidate.src === image.src);
+    inventory.set(image.src, item);
+  }
+  const rows = [...inventory.entries()].map(([src, item]) => [
+    src, [...item.pages].join(' | '), item.occurrences, item.filename, item.alt, item.cdnManaged,
+    item.recommendation?.issue ?? '', item.recommendation?.basis ?? '', item.recommendation?.suggestedFilename ?? '', item.recommendation?.suggestedAlt ?? '', item.recommendation?.visualDescription ?? ''
+  ]);
   return [header, ...rows].map(row => row.map(csv).join(',')).join('\n') + '\n';
 }

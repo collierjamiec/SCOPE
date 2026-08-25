@@ -22,6 +22,11 @@ test('suggests alt text and filenames for images that need optimization', () => 
   assert.equal(result.imageRecommendations[0].basis, 'page_context');
 });
 
+test('does not mistake an opaque CDN asset identifier for a renameable filename', () => {
+  const result = extractPage('https://example.com', 'https://example.com', 200, 'text/html', '<title>Team</title><h1>Team</h1><img src="https://cdn.example.com/avatar/cdb7f6881f21a0a74a9531eeeefce2e7db3e9610d9315ec5b9e76886757c1d3b" alt="Team member">', new Headers());
+  assert.equal(result.imageRecommendations.length, 0);
+});
+
 test('produces transparent AI answer-readiness dimensions and opportunities', () => {
   const html = '<title>Answering Service Guide</title><meta name="robots" content="nosnippet"><main><h1>Answering Service Guide</h1><h2>What is an answering service?</h2><p>An answering service handles customer calls on behalf of a business so callers can receive timely assistance.</p></main>';
   const result = extractPage('https://example.test/', 'https://example.test/', 200, 'text/html', html, new Headers());
