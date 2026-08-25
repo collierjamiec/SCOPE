@@ -2,7 +2,7 @@ import type { KeywordCandidate, PageResult } from './types.js';
 
 type Row = Record<string, string>;
 
-function parseCsv(input: string): Row[] {
+function csvTable(input: string): string[][] {
   const table: string[][] = []; let row: string[] = []; let value = ''; let quoted = false;
   for (let index = 0; index < input.length; index += 1) {
     const character = input[index];
@@ -15,6 +15,11 @@ function parseCsv(input: string): Row[] {
     } else value += character;
   }
   row.push(value); if (row.some(cell => cell.trim())) table.push(row);
+  return table;
+}
+
+function parseCsv(input: string): Row[] {
+  const table = csvTable(input);
   if (table.length < 2) return [];
   const normalize = (header: string) => header.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
   const headerIndex = table.findIndex(candidate => {
@@ -57,14 +62,26 @@ export function mergeGscExport(keywords: KeywordCandidate[], csv: string | undef
   return rows.length;
 }
 
-export function detectGscDateRange(csvFiles: Array<string | undefined>): { start: string; end: string; source: 'Dates export' } | undefined {
+export function detectGscDateRange(csvFiles: Array<string | undefined>): { start?: string; end?: string; label: string; source: 'Filters export' | 'Date dimension export' } | undefined {
+  const filterRows = csvFiles.flatMap(csv => csv?.trim() ? csvTable(csv) : []);
+  const filters = filterRows.find(row => row.length <= 2 && /^(?:date|date range)$/i.test(row[0]?.trim() ?? '') && row.slice(1).some(Boolean));
+  const inlineFilter = filterRows.map(row => row.join(', ').trim()).map(value => value.match(/^(?:date|date range)\s*:\s*(.+)$/i)?.[1]).find(Boolean);
+  if (filters) {
+    const label = filters.slice(1).join(', ').trim();
+    const candidates = label.match(/\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}\/\d{2,4}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4})\b/gi) ?? [];
+    const parsed = candidates.map(value => new Date(value)).filter(date => !Number.isNaN(date.valueOf())).sort((a, b) => a.valueOf() - b.valueOf());
+    const iso = (date: Date) => date.toISOString().slice(0, 10);
+    return parsed.length >= 2 ? { start: iso(parsed[0]), end: iso(parsed[parsed.length - 1]), label, source: 'Filters export' } : { label, source: 'Filters export' };
+  }
+  if (inlineFilter) return { label: inlineFilter, source: 'Filters export' };
   const dates = csvFiles.flatMap(csv => csv?.trim() ? parseCsv(csv).map(row => field(row, ['date'])).filter(Boolean) : [])
     .map(value => new Date(value))
     .filter(date => !Number.isNaN(date.valueOf()))
     .sort((a, b) => a.valueOf() - b.valueOf());
   if (!dates.length) return undefined;
   const iso = (date: Date) => date.toISOString().slice(0, 10);
-  return { start: iso(dates[0]), end: iso(dates[dates.length - 1]), source: 'Dates export' };
+  const start = iso(dates[0]), end = iso(dates[dates.length - 1]);
+  return { start, end, label: `${start} through ${end}`, source: 'Date dimension export' };
 }
 
 export function applyGa4Export(pages: PageResult[], csv: string | undefined, origin: string): number {

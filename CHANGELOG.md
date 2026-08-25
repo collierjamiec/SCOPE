@@ -11,6 +11,8 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 - Page-type classification applies archive-specific rules instead of judging archives like articles or landing pages.
 - Full Audit now selects exhaustive maximum scope, every module, external depth 3, and Fast pacing.
 - A written Executive Summary synthesizes overall health, severity, leading themes, and audit context without duplicating detailed tabs.
+- Corrected GSC upload guidance and reporting-period detection to use the standard `Filters.csv`.
+- Added a dedicated PageSpeed settings section and sortable PageSpeed dashboard with Lighthouse lab scores, timing metrics, errors, and available Chrome UX Report field data.
 
 ## 2.0.0 — 2026-08-25
 
@@ -23,7 +25,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 - Exhaustive image inventory with CDN handling and optional visual analysis
 - Prioritized findings, affected-page drilldowns, and severity definitions
 - GSC and GA4 imports with dedicated sortable and filterable views
-- GSC reporting-period detection from `Dates.csv`
+- GSC reporting-period detection from `Filters.csv`, with a custom date-dimension fallback
 - Optional licensed organic SERP adapter
 - Domain-scoped JSON, CSV, DOCX, and optional PDF reports
 - SCOPE branding, logo, creator credit, and copyright footer

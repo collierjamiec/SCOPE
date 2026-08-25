@@ -18,9 +18,17 @@ test('GSC queries are imported even when inferred keywords already fill the limi
   assert.ok(keywords.some(keyword => keyword.keyword === 'observed query' && keyword.searchConsole));
 });
 
-test('derives the GSC reporting period from a Dates export', () => {
+test('derives the GSC reporting period from a date-dimension export fallback', () => {
   const range = detectGscDateRange(['Date,Clicks,Impressions,CTR,Position\n2026-06-30,1,10,10%,4\n2026-06-01,2,20,10%,5\n']);
-  assert.deepEqual(range, { start: '2026-06-01', end: '2026-06-30', source: 'Dates export' });
+  assert.deepEqual(range, { start: '2026-06-01', end: '2026-06-30', label: '2026-06-01 through 2026-06-30', source: 'Date dimension export' });
+});
+
+test('reads the reporting-period filter from a standard GSC Filters export', () => {
+  assert.deepEqual(detectGscDateRange(['Filter,Value\nSearch type,Web\nDate,"June 1, 2026 - June 30, 2026"\n']), {
+    start: '2026-06-01', end: '2026-06-30', label: 'June 1, 2026 - June 30, 2026', source: 'Filters export'
+  });
+  assert.deepEqual(detectGscDateRange(['Filter,Value\nDate,Last 3 months\n']), { label: 'Last 3 months', source: 'Filters export' });
+  assert.deepEqual(detectGscDateRange(['Date: Last 28 days\nSearch type: Web\n']), { label: 'Last 28 days', source: 'Filters export' });
 });
 
 test('attaches GA4 landing-page metrics to matching pages', () => {

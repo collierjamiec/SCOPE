@@ -121,6 +121,7 @@ export interface PageSpeedResult {
   bestPractices: number | null;
   seo: number | null;
   metrics: Record<string, number | null>;
+  fieldMetrics?: Record<string, { percentile: number | null; category: string | null }>;
   error?: string;
 }
 
@@ -232,7 +233,7 @@ export interface AuditReport {
   keywords: KeywordCandidate[];
   cannibalization: CannibalizationIssue[];
   aiCrawlerAccess: Array<{ crawler: string; allowed: boolean; note: string }>;
-  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number; gscDateRange?: { start: string; end: string; source: 'Dates export' } };
+  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number; gscDateRange?: { start?: string; end?: string; label: string; source: 'Filters export' | 'Date dimension export' } };
   priorities: Array<{ rank: number; area: string; issue: string; impact: 'high' | 'medium' | 'low'; effort: 'low' | 'medium' | 'high'; affectedPages: number; affectedUrls: string[]; recommendation: string }>;
   generatedAt: string;
   partial?: boolean;

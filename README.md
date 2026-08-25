@@ -91,12 +91,12 @@ Observed GSC queries take precedence over inferred keyword candidates wherever b
 From **Search Console → Performance → Search results**, select the intended date range and search type, enable Clicks, Impressions, Average CTR, and Average position, then export CSV. The standard export may be a ZIP containing several files. The dashboard accepts multiple files:
 
 - `Queries.csv` — required for observed queries, clicks, impressions, CTR, and average position
-- `Dates.csv` — strongly recommended so SCOPE can disclose the exact reporting period
+- `Filters.csv` — strongly recommended because it records the selected date filter and other report filters; SCOPE displays exact dates when present or the filter label (such as “Last 3 months”) otherwise
 - `Pages.csv` — optional page aggregate; it cannot connect individual queries to pages by itself
 
 A normal Search Console export does **not** contain a combined Query + Page table. To map each query to landing pages, provide a custom CSV from the Search Analytics API using both `query` and `page` dimensions, or equivalent bulk data from BigQuery. Required columns are Query, Page, Clicks, Impressions, CTR, and Position.
 
-If no `Dates.csv` is supplied, SCOPE explicitly reports that the reporting period is unavailable rather than implying positions are current.
+If no `Filters.csv` is supplied, SCOPE explicitly reports that the reporting period is unavailable rather than implying positions are current. A custom date-dimension CSV can provide exact minimum and maximum dates as a fallback, but it is not part of every standard export.
 
 ## Google Analytics 4 imports
 
@@ -156,7 +156,9 @@ SCOPE does not send reports by email. Users download the PDF and share it throug
 
 ### PageSpeed Insights
 
-PageSpeed is disabled by default because it is slower and may be quota-limited. Set `PAGESPEED_API_KEY` and enable it in the dashboard or pass `--pagespeed`.
+PageSpeed is disabled by default because it runs a separate Google PageSpeed Insights request for every analyzed page, which adds time and may be quota-limited. Open **Settings → Performance & PageSpeed** to enable it, or pass `--pagespeed` on the CLI. Set `PAGESPEED_API_KEY` for larger audits.
+
+When enabled, the dashboard adds a dedicated **PageSpeed** report with sortable, searchable per-page results: mobile Lighthouse performance, accessibility, best-practices and SEO scores; lab LCP, CLS, TBT, FCP and Speed Index; request errors; and field LCP, CLS and INP from Chrome UX Report data when Google has enough real-user observations. Lab and field data are identified separately.
 
 ### Licensed SERP provider
 
