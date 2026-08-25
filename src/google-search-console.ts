@@ -1,7 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const scope = 'https://www.googleapis.com/auth/webmasters.readonly';
 
@@ -16,7 +15,7 @@ export interface SearchConsoleQueryOptions { siteUrl: string; startDate: string;
 
 export function googleCredentialPath(): string {
   return process.env.SCOPE_GOOGLE_CREDENTIALS_FILE
-    ?? join(process.env.SCOPE_DATA_DIR ?? join(homedir(), '.scope'), 'google-search-console.json');
+    ?? join(process.env.SCOPE_DATA_DIR ?? resolve(process.cwd(), '.scope'), 'google-search-console.json');
 }
 
 export async function loadGoogleCredentials(): Promise<GoogleLocalCredentials | undefined> {

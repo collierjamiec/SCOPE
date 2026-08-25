@@ -98,7 +98,7 @@ On each installed device, open **Settings → Connected data → Google Search C
 4. Paste the client ID and client secret into SCOPE and choose **Save locally & connect**.
 5. Select the Google account, Search Console property, and reporting dates for the audit.
 
-The OAuth client configuration and refresh token are stored only in the device-local SCOPE data directory (`~/.scope/google-search-console.json` by default) with owner-only file permissions. Override the location with `SCOPE_DATA_DIR` or `SCOPE_GOOGLE_CREDENTIALS_FILE`. Credentials and tokens are never included in audit files, API responses, logs, or Git. The interface can reconnect with another Google account, disconnect the current account while retaining the installed OAuth client, or remove all locally stored Google credentials.
+The OAuth client configuration and refresh token are stored only in the installation-local, Git-ignored SCOPE data directory (`.scope/google-search-console.json` by default) with owner-only file permissions. Packaged installations can set an OS-specific application-data location with `SCOPE_DATA_DIR`, or set an exact path with `SCOPE_GOOGLE_CREDENTIALS_FILE`. Credentials and tokens are never included in audit files, API responses, logs, or Git. The interface can reconnect with another Google account, disconnect the current account while retaining the installed OAuth client, or remove all locally stored Google credentials.
 
 SCOPE requests finalized Web search data in pages of 25,000 rows, up to 50,000 query/page rows per audit. Google may still omit anonymized or lower-volume rows because of Search Console’s internal data limitations.
 
