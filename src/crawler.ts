@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio';
 import type { AuditConfig, AuditReport, ExternalPageResult, PageResult, SitemapResult } from './types.js';
 import { extractPage } from './extract.js';
 import { aggregateKeywords, applyRankings, detectCannibalization } from './keywords.js';
-import { applyGa4Export, detectGscDateRange, mergeGscExport } from './imports.js';
+import { applyGa4Export, averageGscPosition, detectGscDateRange, mergeGscExport } from './imports.js';
 import { fetchPageSpeed } from './pagespeed.js';
 import { getRankings, HttpSerpProvider } from './serp.js';
 import { enrichImageRecommendations } from './image-analysis.js';
@@ -363,6 +363,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const combinedGscFiles = [input.gscQueryPageCsv, ...standardGscFiles.filter(csv => /(?:^|,)\s*(?:page|top pages)\s*(?:,|$)/im.test(csv) && /(?:^|,)\s*(?:query|top queries)\s*(?:,|$)/im.test(csv))].filter((csv): csv is string => Boolean(csv));
   const selectedGscFiles = combinedGscFiles.length ? combinedGscFiles : standardGscFiles;
   const gscRows = selectedGscFiles.reduce((total, csv) => total + mergeGscExport(keywords, csv, input.maxKeywords, startUrl), 0);
+  const gscAveragePosition = averageGscPosition(keywords);
   keywords.sort((a, b) => Number(Boolean(b.searchConsole)) - Number(Boolean(a.searchConsole))
     || (b.searchConsole?.impressions ?? 0) - (a.searchConsole?.impressions ?? 0)
     || b.score - a.score
@@ -400,7 +401,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,
     redirects, brokenLinks, externalPages,
-    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length, gscProperty: input.gscProperty, gscDateRange }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
+    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length, gscAveragePosition, gscProperty: input.gscProperty, gscDateRange }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
   };
   await renderedBrowser?.close();
   await onProgress({ phase: 'complete', message: 'Audit complete', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 100 });

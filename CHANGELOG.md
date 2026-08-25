@@ -16,6 +16,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 - Changed Full Audit to validate directly linked external URLs without crawling onward through external sites.
 - Added a local, read-only Google Search Console OAuth connection with property/account switching and direct query-plus-page ranking imports. OAuth credentials and refresh tokens stay in a permission-restricted device-local file and are excluded from Git and reports.
 - Store local OAuth credentials under the writable, Git-ignored installation `.scope/` directory by default; packaged installs can override the data path.
+- Added an impression-weighted average GSC keyword-position KPI to the dashboard and generated report.
 
 ## 2.0.0 — 2026-08-25
 

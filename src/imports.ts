@@ -62,6 +62,14 @@ export function mergeGscExport(keywords: KeywordCandidate[], csv: string | undef
   return rows.length;
 }
 
+export function averageGscPosition(keywords: KeywordCandidate[]): number | undefined {
+  const observed = keywords.filter(keyword => keyword.searchConsole && Number.isFinite(keyword.searchConsole.position));
+  if (!observed.length) return undefined;
+  const impressions = observed.reduce((total, keyword) => total + (keyword.searchConsole?.impressions ?? 0), 0);
+  if (impressions > 0) return observed.reduce((total, keyword) => total + (keyword.searchConsole!.position * keyword.searchConsole!.impressions), 0) / impressions;
+  return observed.reduce((total, keyword) => total + keyword.searchConsole!.position, 0) / observed.length;
+}
+
 export function detectGscDateRange(csvFiles: Array<string | undefined>): { start?: string; end?: string; label: string; source: 'Filters export' | 'Date dimension export' } | undefined {
   const filterRows = csvFiles.flatMap(csv => csv?.trim() ? csvTable(csv) : []);
   const filters = filterRows.find(row => row.length <= 2 && /^(?:date|date range)$/i.test(row[0]?.trim() ?? '') && row.slice(1).some(Boolean));

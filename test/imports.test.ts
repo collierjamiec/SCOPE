@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyGa4Export, detectGscDateRange, mergeGscExport } from '../src/imports.js';
+import { applyGa4Export, averageGscPosition, detectGscDateRange, mergeGscExport } from '../src/imports.js';
 import type { PageResult } from '../src/types.js';
 
 test('merges Search Console exports into keyword candidates', () => {
@@ -16,6 +16,13 @@ test('GSC queries are imported even when inferred keywords already fill the limi
   const keywords: any[] = [{ keyword: 'inferred phrase', score: 10, confidence: .8, pages: [], ranking: null }];
   mergeGscExport(keywords, 'Query,Clicks,Impressions,CTR,Position\nobserved query,5,50,10%,3.2\n', 1, 'https://example.com');
   assert.ok(keywords.some(keyword => keyword.keyword === 'observed query' && keyword.searchConsole));
+});
+
+test('calculates impression-weighted average GSC position', () => {
+  const keywords: any[] = [];
+  mergeGscExport(keywords, 'Query,Page,Clicks,Impressions,CTR,Position\nfirst,https://example.com/a,1,100,1%,2\nsecond,https://example.com/b,1,300,0.3%,10\n', 100, 'https://example.com');
+  assert.equal(averageGscPosition(keywords), 8);
+  assert.equal(averageGscPosition([]), undefined);
 });
 
 test('derives the GSC reporting period from a date-dimension export fallback', () => {
