@@ -21,6 +21,9 @@ export interface AuditConfig {
   gscCsv?: string;
   gscCsvFiles?: string[];
   gscQueryPageCsv?: string;
+  /** Reporting period supplied by a direct Search Console API query. */
+  gscDateRangeOverride?: { start: string; end: string; label: string; source: 'Google Search Console API' };
+  gscProperty?: string;
   ga4Csv?: string;
   /** Safety controls for unlimited and highly faceted sites. */
   maxDepth?: number | null;
@@ -233,7 +236,7 @@ export interface AuditReport {
   keywords: KeywordCandidate[];
   cannibalization: CannibalizationIssue[];
   aiCrawlerAccess: Array<{ crawler: string; allowed: boolean; note: string }>;
-  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number; gscDateRange?: { start?: string; end?: string; label: string; source: 'Filters export' | 'Date dimension export' } };
+  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number; gscProperty?: string; gscDateRange?: { start?: string; end?: string; label: string; source: 'Filters export' | 'Date dimension export' | 'Google Search Console API' } };
   priorities: Array<{ rank: number; area: string; issue: string; impact: 'high' | 'medium' | 'low'; effort: 'low' | 'medium' | 'high'; affectedPages: number; affectedUrls: string[]; recommendation: string }>;
   generatedAt: string;
   partial?: boolean;

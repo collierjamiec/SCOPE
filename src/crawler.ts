@@ -368,7 +368,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     || b.score - a.score
     || a.keyword.localeCompare(b.keyword));
   if (keywords.length > input.maxKeywords) keywords.splice(input.maxKeywords);
-  const gscDateRange = detectGscDateRange([input.gscQueryPageCsv, ...standardGscFiles]);
+  const gscDateRange = input.gscDateRangeOverride ?? detectGscDateRange([input.gscQueryPageCsv, ...standardGscFiles]);
   const ga4Rows = applyGa4Export(pages, input.ga4Csv, startUrl);
   const rankingCandidates = keywords.slice(0, input.maxRankings ?? 100);
   if (input.serp && rankingCandidates.length) applyRankings(rankingCandidates, await getRankings(new HttpSerpProvider(input.serp), rankingCandidates, new URL(startUrl).hostname));
@@ -400,7 +400,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,
     redirects, brokenLinks, externalPages,
-    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length, gscDateRange }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
+    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length, gscProperty: input.gscProperty, gscDateRange }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
   };
   await renderedBrowser?.close();
   await onProgress({ phase: 'complete', message: 'Audit complete', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 100 });

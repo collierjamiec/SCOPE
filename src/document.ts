@@ -211,7 +211,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
       [1900, 1800, 1700, 1700, 2260]
     ),
     body(`${report.partial ? 'PARTIAL REPORT: The crawl was cancelled by the user; findings cover only pages completed before cancellation. ' : ''}This report separates observed crawl evidence from inferred keyword relevance. When no SERP provider is configured, keyword positions remain unavailable and cannibalization flags indicate overlapping on-page targeting rather than proven ranking overlap.`),
-    body(`Imported data: ${report.importedData.gscRows} GSC row(s) and ${report.importedData.ga4Rows} GA4 row(s). CSV exports are processed locally and are not retained in the report configuration.`),
+    body(`Imported data: ${report.importedData.gscRows} GSC row(s) and ${report.importedData.ga4Rows} GA4 row(s).${report.importedData.gscProperty ? ` Search Console property: ${report.importedData.gscProperty}.` : ''}${report.importedData.gscDateRange ? ` GSC reporting period: ${report.importedData.gscDateRange.start ?? report.importedData.gscDateRange.label} through ${report.importedData.gscDateRange.end ?? report.importedData.gscDateRange.label} (${report.importedData.gscDateRange.source}).` : ''} Uploaded exports are processed locally; Google credentials and tokens are never retained in report configuration or output files.`),
     heading('Prioritized action roadmap', 1),
     body('Priority combines issue severity and the number of affected pages. Effort is an implementation estimate and should be validated against the site platform.'),
     dataTable(

@@ -86,6 +86,24 @@ SCOPE also reports Googlebot and Bingbot access for comparison. A missing `llms.
 
 ## Google Search Console imports
 
+### Direct Search Console API connection
+
+The dashboard can connect directly to the Google Search Console API using read-only OAuth access. This is the preferred method because SCOPE requests the `query` and `page` dimensions together, preserving the real keyword-to-landing-page relationship used for positions and cannibalization analysis.
+
+On each installed device, open **Settings → Connected data → Google Search Console API**:
+
+1. Create or select a Google Cloud project and enable the Google Search Console API.
+2. Configure its OAuth consent screen.
+3. Create an OAuth client for a **Desktop app**.
+4. Paste the client ID and client secret into SCOPE and choose **Save locally & connect**.
+5. Select the Google account, Search Console property, and reporting dates for the audit.
+
+The OAuth client configuration and refresh token are stored only in the device-local SCOPE data directory (`~/.scope/google-search-console.json` by default) with owner-only file permissions. Override the location with `SCOPE_DATA_DIR` or `SCOPE_GOOGLE_CREDENTIALS_FILE`. Credentials and tokens are never included in audit files, API responses, logs, or Git. The interface can reconnect with another Google account, disconnect the current account while retaining the installed OAuth client, or remove all locally stored Google credentials.
+
+SCOPE requests finalized Web search data in pages of 25,000 rows, up to 50,000 query/page rows per audit. Google may still omit anonymized or lower-volume rows because of Search Console’s internal data limitations.
+
+### CSV fallback
+
 Observed GSC queries take precedence over inferred keyword candidates wherever both exist. GSC position is the impression-weighted average over the uploaded report period—not a live, current ranking.
 
 From **Search Console → Performance → Search results**, select the intended date range and search type, enable Clicks, Impressions, Average CTR, and Average position, then export CSV. The standard export may be a ZIP containing several files. The dashboard accepts multiple files:
