@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { crawlSite, isExcludedUrl, validateConfig } from '../src/crawler.js';
+import { crawlSite, isExcludedUrl, safeCrawlUrl, validateConfig } from '../src/crawler.js';
 
 test('accepts an unlimited crawl configuration', () => {
   assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
@@ -10,6 +10,10 @@ test('accepts an unlimited crawl configuration', () => {
 
 test('accepts thousands of discovered keywords while limiting ranking checks', () => {
   assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 5000, maxRankings: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
+});
+
+test('normalizes tracking parameters before queueing crawl URLs', () => {
+  assert.equal(safeCrawlUrl('https://example.test/a?utm_source=x&b=2&a=1#section'), 'https://example.test/a?a=1&b=2');
 });
 
 test('path exclusions match a section and its descendants without matching similar slugs', () => {

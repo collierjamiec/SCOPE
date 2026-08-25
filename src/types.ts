@@ -20,6 +20,10 @@ export interface AuditConfig {
   /** Raw exports are consumed locally and omitted from the persisted report config. */
   gscCsv?: string;
   ga4Csv?: string;
+  /** Safety controls for unlimited and highly faceted sites. */
+  maxDepth?: number | null;
+  maxUrlsPerPath?: number;
+  stripTrackingParameters?: boolean;
 }
 
 export interface ImageAnalysisConfig {
@@ -196,7 +200,8 @@ export interface AuditReport {
   keywords: KeywordCandidate[];
   cannibalization: CannibalizationIssue[];
   aiCrawlerAccess: Array<{ crawler: string; allowed: boolean; note: string }>;
-  importedData: { gscRows: number; ga4Rows: number };
+  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number };
+  priorities: Array<{ rank: number; area: string; issue: string; impact: 'high' | 'medium' | 'low'; effort: 'low' | 'medium' | 'high'; affectedPages: number; recommendation: string }>;
   generatedAt: string;
 }
 

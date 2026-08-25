@@ -210,6 +210,13 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
     ),
     body('This report separates observed crawl evidence from inferred keyword relevance. When no SERP provider is configured, keyword positions remain unavailable and cannibalization flags indicate overlapping on-page targeting rather than proven ranking overlap.'),
     body(`Imported data: ${report.importedData.gscRows} GSC row(s) and ${report.importedData.ga4Rows} GA4 row(s). CSV exports are processed locally and are not retained in the report configuration.`),
+    heading('Prioritized action roadmap', 1),
+    body('Priority combines issue severity and the number of affected pages. Effort is an implementation estimate and should be validated against the site platform.'),
+    dataTable(
+      ['Rank', 'Impact', 'Effort', 'Area', 'Affected', 'Recommended action'],
+      report.priorities.map(item => [item.rank, item.impact, item.effort, item.area, item.affectedPages, item.recommendation]),
+      [650, 900, 900, 1050, 800, 5260]
+    ),
     heading('AI answer readiness', 1),
     body(`Average readiness score: ${averageAio}/100 across ${aioPages.length} analyzed pages. This measures technical and content readiness—not verified inclusion, ranking, or citation in an AI answer.`),
     dataTable(

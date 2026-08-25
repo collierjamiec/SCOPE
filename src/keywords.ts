@@ -69,6 +69,13 @@ export function aggregateKeywords(pages: PageResult[], maximum: number): Keyword
 
 export function detectCannibalization(keywords: KeywordCandidate[]): CannibalizationIssue[] {
   return keywords.flatMap(keyword => {
+    if ((keyword.searchConsole?.pages.length ?? 0) > 1) return [{
+      keyword: keyword.keyword,
+      severity: keyword.searchConsole!.pages.length > 2 ? 'likely' as const : 'possible' as const,
+      pages: keyword.searchConsole!.pages.map(url => ({ url, score: keyword.pages.find(page => page.url === url)?.score ?? 0 })),
+      reason: `Google Search Console reports this query across ${keyword.searchConsole!.pages.length} landing pages; review intent, internal linking, and ranking stability.`
+    }];
+    if (!keyword.pages.length) return [];
     const contenders = keyword.pages.filter(page => page.score >= Math.max(5, keyword.pages[0].score * 0.65));
     if (contenders.length < 2) return [];
     const close = contenders[1].score >= contenders[0].score * 0.8;

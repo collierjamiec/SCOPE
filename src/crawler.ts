@@ -8,6 +8,7 @@ import { fetchPageSpeed } from './pagespeed.js';
 import { getRankings, HttpSerpProvider } from './serp.js';
 import { enrichImageRecommendations } from './image-analysis.js';
 import { normaliseUrl, sameHost } from './util.js';
+import { buildPriorities } from './priorities.js';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const require = createRequire(import.meta.url);
@@ -41,12 +42,26 @@ export function isExcludedUrl(url: string, patterns: string[] = []): boolean {
   });
 }
 
+const trackingParameters = /^(utm_.+|gclid|fbclid|msclkid|dclid|mc_cid|mc_eid)$/i;
+export function safeCrawlUrl(url: string, stripTracking = true): string {
+  const candidate = new URL(url);
+  candidate.hash = '';
+  if (stripTracking) for (const key of [...candidate.searchParams.keys()]) if (trackingParameters.test(key)) candidate.searchParams.delete(key);
+  candidate.searchParams.sort();
+  return candidate.href;
+}
+
+const urlDepth = (url: string) => new URL(url).pathname.split('/').filter(Boolean).length;
+const pathBucket = (url: string) => new URL(url).pathname.split('/').filter(Boolean)[0] ?? '/';
+
 export function validateConfig(config: AuditConfig): void {
   const url = new URL(config.startUrl);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Start URL must use HTTP or HTTPS.');
   if (config.maxPages !== null && (!Number.isInteger(config.maxPages) || config.maxPages < 1)) throw new Error('maxPages must be null (unlimited) or a positive integer.');
   if (!Number.isInteger(config.maxKeywords) || config.maxKeywords < 1 || config.maxKeywords > 5000) throw new Error('maxKeywords must be an integer between 1 and 5000.');
   if (config.maxRankings !== undefined && (!Number.isInteger(config.maxRankings) || config.maxRankings < 0 || config.maxRankings > 100)) throw new Error('maxRankings must be an integer between 0 and 100.');
+  if (config.maxDepth !== undefined && config.maxDepth !== null && (!Number.isInteger(config.maxDepth) || config.maxDepth < 0 || config.maxDepth > 50)) throw new Error('maxDepth must be null or an integer between 0 and 50.');
+  if (config.maxUrlsPerPath !== undefined && (!Number.isInteger(config.maxUrlsPerPath) || config.maxUrlsPerPath < 10)) throw new Error('maxUrlsPerPath must be at least 10.');
 }
 
 async function loadRobots(origin: string, userAgent: string) {
@@ -123,7 +138,8 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   await onProgress({ phase: 'robots', message: 'robots.txt loaded and crawl rules applied', fetched: 0, analyzed: 0, queued: 1, percent: 1 });
   const robots = robotsInfo.parser;
   const sitemapInfo = await inspectSitemaps(origin, robotsInfo.sitemapUrls, input.userAgent);
-  const queue = [startUrl, ...sitemapInfo.pageUrls.filter(url => url !== startUrl)];
+  const clean = (url: string) => safeCrawlUrl(url, input.stripTrackingParameters !== false);
+  const queue = [startUrl, ...sitemapInfo.pageUrls.filter(url => url !== startUrl)].map(clean);
   const queued = new Set(queue);
   const fetched = new Set<string>();
   const pages: PageResult[] = [];
@@ -131,12 +147,17 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const redirects: AuditReport['redirects'] = [];
   const excluded: AuditReport['excludedPages'] = [];
   const configuredExclusions = input.excludePaths ?? [];
+  const pathCounts = new Map<string, number>();
   await onProgress({ phase: 'sitemaps', message: `Discovered ${sitemapInfo.pageUrls.length} sitemap URLs`, fetched: 0, analyzed: 0, queued: queue.length, percent: input.maxPages ? 2 : null });
 
   while (queue.length && (input.maxPages === null || fetched.size < input.maxPages)) {
     const url = queue.shift()!;
     if (fetched.has(url)) continue;
     if (isExcludedUrl(url, configuredExclusions)) { excluded.push({ url, reason: 'Excluded by audit configuration' }); continue; }
+    if (input.maxDepth !== null && urlDepth(url) > (input.maxDepth ?? 12)) { excluded.push({ url, reason: `Crawl safety: URL depth exceeds ${input.maxDepth ?? 12}` }); continue; }
+    const bucket = pathBucket(url), bucketCount = pathCounts.get(bucket) ?? 0;
+    if (bucketCount >= (input.maxUrlsPerPath ?? 2000)) { excluded.push({ url, reason: `Crawl safety: more than ${input.maxUrlsPerPath ?? 2000} URLs in /${bucket === '/' ? '' : bucket}` }); continue; }
+    pathCounts.set(bucket, bucketCount + 1);
     fetched.add(url);
     await onProgress({
       phase: 'crawling', message: `Fetching ${url}`, fetched: fetched.size, analyzed: pages.length, queued: queue.length,
@@ -165,7 +186,8 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       }
       // Discover allowed same-host URLs even if the current page is non-indexable.
       for (const link of page.links) {
-        if (link.internal && sameHost(link.url, startUrl) && !queued.has(link.url) && !fetched.has(link.url)) { queue.push(link.url); queued.add(link.url); }
+        const destination = clean(link.url);
+        if (link.internal && sameHost(destination, startUrl) && !queued.has(destination) && !fetched.has(destination)) { queue.push(destination); queued.add(destination); }
       }
       if (!page.indexable) { excluded.push({ url: finalUrl, reason: `Non-indexable (${page.robotsDirectives.includes('noindex') ? 'noindex' : `HTTP ${response.status}`})`, status: response.status }); continue; }
       if (analyzedUrls.has(finalUrl)) continue;
@@ -209,12 +231,12 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     config: {
       startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords, maxRankings: input.maxRankings ?? 100,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
-      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
+      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,
     redirects, brokenLinks,
-    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows }, generatedAt: new Date().toISOString()
+    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString()
   };
   await onProgress({ phase: 'complete', message: 'Audit complete', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 100 });
   return report;

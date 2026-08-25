@@ -43,6 +43,8 @@ Open the displayed local URL, enter any starting page, and watch live robots, si
 
 Use the orange gear to open compact accordion settings for crawl scope, keyword analysis, audit modules, and connected data. Choose a **Quick scan**, **SEO audit**, **SEO + AIO**, **Full audit**, or customize the page limit, crawl pace, exclusions, discovery of up to 5,000 keywords, up to 100 licensed SERP checks, PageSpeed, image, broken-link, and schema analysis. GSC and GA4 CSV exports can be imported locally without sharing Google credentials; GSC query metrics enrich keyword findings and GA4 landing-page metrics enrich matching page records.
 
+Unlimited crawls retain safety controls: configurable URL depth, a per-top-level-path URL ceiling, and normalization of common tracking parameters. The dashboard opens completed audits on a prioritized action roadmap and adds dedicated GSC and GA4 views when matching exports were supplied.
+
 The default copyright owner and creator credit are **Jamie C. Collier** and can be overridden with `SCOPE_COPYRIGHT_OWNER` and `SCOPE_CREATOR_NAME`.
 
 Completed reports can be downloaded as DOCX or PDF from the dashboard. SCOPE does not collect recipient addresses or send email; users can share the downloaded PDF through their own email service.

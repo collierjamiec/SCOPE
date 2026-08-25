@@ -29,3 +29,9 @@ test('similar targeting on two pages flags cannibalization', () => {
   assert.ok(issues.length > 0);
   assert.equal(issues[0].severity, 'likely');
 });
+
+test('Search Console landing-page overlap flags observed cannibalization', () => {
+  const issues = detectCannibalization([{ keyword: 'seo audit', score: 0, confidence: 1, pages: [], ranking: null, searchConsole: { clicks: 3, impressions: 50, ctr: 0.06, position: 8, pages: ['https://example.com/a', 'https://example.com/b'] } }]);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0].reason, /Search Console/);
+});
