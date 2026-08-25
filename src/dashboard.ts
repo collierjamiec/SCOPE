@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import { createServer, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { resolve } from 'node:path';
-import { Resend } from 'resend';
 import { crawlSite, type CrawlProgress } from './crawler.js';
 import { auditDocumentFilename, createAuditDocument } from './document.js';
 import { imagesCsv, keywordsCsv, linksCsv, pagesCsv } from './report.js';
@@ -33,24 +32,6 @@ async function body(request: import('node:http').IncomingMessage): Promise<any> 
 function artifact(response: ServerResponse, path: string, type: string, name: string) {
   response.writeHead(200, { 'content-type': type, 'content-disposition': `attachment; filename="${name}"` });
   createReadStream(path).pipe(response);
-}
-
-async function emailReport(job: Job, recipient: string): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey || apiKey === 're_xxxxxxxxx') throw new Error('Resend is not configured. Replace re_xxxxxxxxx in .env with your real RESEND_API_KEY.');
-  if (!job.pdf || !job.report) throw new Error('The PDF report is not available yet.');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) throw new Error('Enter a valid recipient email address.');
-  const resend = new Resend(apiKey);
-  const filename = job.pdf.split('/').pop()!;
-  const { error } = await resend.emails.send({
-    from: process.env.RESEND_FROM ?? 'SCOPE <onboarding@resend.dev>',
-    to: [recipient],
-    replyTo: process.env.RESEND_REPLY_TO ?? 'jamie@phoenixrisingseo.com',
-    subject: `SCOPE website audit — ${job.report.domain}`,
-    html: `<p>Attached is the <strong>SCOPE</strong> website audit for <strong>${job.report.domain}</strong>.</p><p>SCOPE is the Search &amp; Content Optimization Performance Engine, created by Jamie C. Collier.</p>`,
-    attachments: [{ content: (await readFile(job.pdf)).toString('base64'), filename }]
-  });
-  if (error) throw new Error(`Resend could not send the report: ${error.message}`);
 }
 
 async function run(job: Job, config: AuditConfig) {
@@ -89,8 +70,7 @@ function metrics(){const findings=report.pages.flatMap(p=>p.findings),aio=report
 const link=u=>'<a href="'+esc(u)+'" target="_blank" rel="noreferrer">'+esc(u)+'</a>';
 function rows(kind){if(kind==='pages')return report.pages.map(p=>'<tr><td>'+link(p.url)+'</td><td>'+p.status+'</td><td>'+esc(p.title)+'</td><td>'+p.metaDescriptionCharacters+'</td><td>'+p.wordCount+'</td><td>'+p.internalLinkCount+' / '+p.externalLinkCount+'</td><td>'+p.findings.length+'</td></tr>').join('');if(kind==='aio')return report.pages.map(p=>'<tr><td>'+link(p.url)+'</td><td class="score">'+(p.aio?.score??'n/a')+'</td><td>'+esc((p.aio?.label??'not assessed').replaceAll('_',' '))+'</td><td>'+(p.aio?.dimensions.extractability??'')+'</td><td>'+(p.aio?.dimensions.evidence??'')+'</td><td>'+(p.aio?.dimensions.entityClarity??'')+'</td><td>'+(p.aio?.indicators.filter(i=>i.status!=='pass').length??0)+'</td></tr>').join('');if(kind==='keywords')return report.keywords.map(k=>'<tr><td><b>'+esc(k.keyword)+'</b></td><td class="score">'+(k.pages[0]?.score??0)+'</td><td>'+Math.round(k.confidence*100)+'%</td><td>'+link(k.pages[0]?.url??'')+'</td><td>'+(k.ranking?.position??'Unavailable')+'</td></tr>').join('');if(kind==='images')return report.pages.flatMap(p=>p.imageRecommendations.map(i=>'<tr><td>'+link(p.url)+'</td><td>'+esc(i.currentFilename)+'</td><td><span class="badge '+(i.issue.includes('missing')?'bad':'')+'">'+esc(i.issue.replaceAll('_',' '))+'</span></td><td>'+esc(i.suggestedFilename)+'</td><td>'+esc(i.suggestedAlt)+'</td><td>'+esc(i.basis.replace('_',' '))+'</td></tr>')).join('');return report.pages.flatMap(p=>p.findings.map(f=>'<tr><td><span class="badge '+(f.severity!=='info'?'bad':'')+'">'+esc(f.severity)+'</span></td><td>'+esc(f.category.toUpperCase())+'</td><td>'+esc(f.message)+'</td><td>'+link(p.url)+'</td></tr>')).join('')}
 const heads={pages:['URL','HTTP','SEO title','Description chars','Words','Internal / external','Findings'],aio:['Page','Readiness score','Label','Extractability /20','Evidence /20','Entity clarity /15','Opportunities'],keywords:['Keyword','Target score','Confidence','Primary page','Organic rank'],images:['Page','Current filename','Issue','Suggested filename','Suggested alt text','Basis'],findings:['Severity','Area','Finding','Page']};
-function render(kind='pages'){const notes=kind==='keywords'?'<p class="activity"><b>Target score</b> weights exact-phrase evidence in title (+8), H1 (+7), H2 (+4), description (+3), and body (+0.12/occurrence). <b>Confidence</b> is a capped evidence-strength heuristic—not ranking probability.</p>':kind==='aio'?'<p class="activity"><b>AI Answer Readiness</b> measures accessibility, extractability, evidence, entity clarity, intent coverage, freshness, and multimodal accessibility. <b>AI visibility is not measured</b> without citation or referral data.</p>':'';$('#results').innerHTML='<div class="metrics">'+metrics()+'</div><div class="tabs">'+Object.keys(heads).map(k=>'<button data-tab="'+k+'" class="'+(k===kind?'active':'')+'">'+k[0].toUpperCase()+k.slice(1)+'</button>').join('')+'</div><section class="panel"><div class="panel-head"><h2>'+kind[0].toUpperCase()+kind.slice(1)+'</h2><div class="downloads"><a href="'+downloads.docx+'">DOCX</a>'+(downloads.pdf?'<a href="'+downloads.pdf+'">PDF</a> <a href="#" id="email-report">Email PDF</a>':'')+'</div></div>'+notes+'<div class="table-wrap"><table><thead><tr>'+heads[kind].map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows(kind)+'</tbody></table></div></section>';document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>render(b.dataset.tab));if($('#email-report'))$('#email-report').onclick=sendReport}
-async function sendReport(event){event.preventDefault();const to=prompt('Email the PDF report to:');if(!to)return;const response=await fetch('/api/audits/'+window.auditId+'/email',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({to})});const result=await response.json();alert(response.ok?'Report sent.':result.error)}
+function render(kind='pages'){const notes=kind==='keywords'?'<p class="activity"><b>Target score</b> weights exact-phrase evidence in title (+8), H1 (+7), H2 (+4), description (+3), and body (+0.12/occurrence). <b>Confidence</b> is a capped evidence-strength heuristic—not ranking probability.</p>':kind==='aio'?'<p class="activity"><b>AI Answer Readiness</b> measures accessibility, extractability, evidence, entity clarity, intent coverage, freshness, and multimodal accessibility. <b>AI visibility is not measured</b> without citation or referral data.</p>':'';$('#results').innerHTML='<div class="metrics">'+metrics()+'</div><div class="tabs">'+Object.keys(heads).map(k=>'<button data-tab="'+k+'" class="'+(k===kind?'active':'')+'">'+k[0].toUpperCase()+k.slice(1)+'</button>').join('')+'</div><section class="panel"><div class="panel-head"><h2>'+kind[0].toUpperCase()+kind.slice(1)+'</h2><div class="downloads"><a href="'+downloads.docx+'">DOCX</a>'+(downloads.pdf?'<a href="'+downloads.pdf+'">Download full PDF</a>':'')+'</div></div>'+notes+'<div class="table-wrap"><table><thead><tr>'+heads[kind].map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows(kind)+'</tbody></table></div></section>';document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>render(b.dataset.tab))}
 $('#launch').onsubmit=async e=>{e.preventDefault();report=null;downloads=null;maxProgress=0;$('#results').innerHTML='';$('#progress').style.display='block';const response=await fetch('/api/audits',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({startUrl:$('#url').value,maxPages:$('#limit').value==='all'?null:Number($('#limit').value),pageSpeed:$('#pagespeed').checked})});const started=await response.json();if(!response.ok){$('#activity').innerHTML='<span class="error">'+esc(started.error)+'</span>';return}window.auditId=started.id;const stream=new EventSource('/api/audits/'+started.id+'/events');stream.addEventListener('progress',e=>{const p=JSON.parse(e.data);maxProgress=Math.max(maxProgress,p.percent??maxProgress);$('#bar').style.width=maxProgress+'%';$('#phase').textContent=p.message;$('#counts').textContent=p.fetched+' fetched • '+p.analyzed+' analyzed • '+p.queued+' queued';$('#activity').textContent=p.currentUrl??p.phase});stream.addEventListener('complete',e=>{const data=JSON.parse(e.data);report=data.report;downloads=data.downloads;$('#bar').style.width='100%';$('#phase').textContent='Audit complete';$('#activity').textContent='Results are ready to explore and download.';stream.close();render()});stream.addEventListener('failed',e=>{const data=JSON.parse(e.data);$('#activity').innerHTML='<span class="error">'+esc(data.error)+'</span>';stream.close()})};
 </script></body></html>`;
 
@@ -123,12 +103,6 @@ const server = createServer(async (request, response) => {
       const job = jobs.get(downloadMatch[1]); const kind = downloadMatch[2]; const path = kind === 'pdf' ? job?.pdf : job?.docx;
       if (!job || !path) return json(response, 404, { error: 'Artifact not available' });
       return artifact(response, path, kind === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', path.split('/').pop()!);
-    }
-    const emailMatch = url.pathname.match(/^\/api\/audits\/([^/]+)\/email$/);
-    if (request.method === 'POST' && emailMatch) {
-      const job = jobs.get(emailMatch[1]); if (!job) return json(response, 404, { error: 'Audit not found' });
-      const input = await body(request); await emailReport(job, String(input.to ?? ''));
-      return json(response, 200, { sent: true });
     }
     json(response, 404, { error: 'Not found' });
   } catch (error) { json(response, 400, { error: error instanceof Error ? error.message : String(error) }); }

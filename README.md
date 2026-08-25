@@ -41,15 +41,7 @@ Open the displayed local URL, enter any starting page, and watch live robots, si
 
 The default copyright owner and creator credit are **Jamie C. Collier** and can be overridden with `SCOPE_COPYRIGHT_OWNER` and `SCOPE_CREATOR_NAME`.
 
-To enable **Email PDF**, copy `.env.example` to `.env` and replace `re_xxxxxxxxx` with your real Resend API key:
-
-```dotenv
-RESEND_API_KEY=re_xxxxxxxxx
-RESEND_FROM=SCOPE <onboarding@resend.dev>
-RESEND_REPLY_TO=jamie@phoenixrisingseo.com
-```
-
-Never commit `.env`. The test sender is useful during setup; configure `RESEND_FROM` with a sender on your verified domain before emailing arbitrary recipients in production.
+Completed reports can be downloaded as DOCX or PDF from the dashboard. SCOPE does not collect recipient addresses or send email; users can share the downloaded PDF through their own email service.
 
 Useful options:
 
