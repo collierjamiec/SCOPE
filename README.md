@@ -47,6 +47,8 @@ Open the displayed local URL, enter any starting page, and watch live robots, si
 
 Use the orange gear to open compact accordion settings for crawl scope, keyword analysis, audit modules, and connected data. Choose a **Quick scan**, **SEO audit**, **SEO + AIO**, **Full audit**, or customize the page limit, crawl pace, exclusions, discovery of up to 5,000 keywords, up to 100 licensed SERP checks, PageSpeed, image, broken-link, and schema analysis. GSC and GA4 CSV exports can be imported locally without sharing Google credentials; GSC query metrics enrich keyword findings and GA4 landing-page metrics enrich matching page records.
 
+**Full Audit** selects the entire eligible site, 5,000 keyword discoveries, 100 SERP checks, PageSpeed, JavaScript rendering, image analysis, broken-link reporting, and schema analysis. GSC and GA4 uploads remain optional because they require user-provided exports, but the settings modal calls them out as recommended performance-data enrichment.
+
 Unlimited crawls retain safety controls: configurable URL depth, a per-top-level-path URL ceiling, and normalization of common tracking parameters. The dashboard opens completed audits on a prioritized action roadmap and adds dedicated GSC and GA4 views when matching exports were supplied.
 
 The dashboard can pause and resume a crawl, stop and generate a partial report, or cancel without generating any report. Standard crawling adds only a 25 ms courtesy delay; Fast mode adds no delay, while Polite mode retains a 250 ms delay.
