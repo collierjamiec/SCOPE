@@ -4,7 +4,7 @@ Copyright © 2026 Jamie C. Collier. All rights reserved.
 
 A respectful, robots-aware website crawler for page metadata, keyword targeting, cannibalization signals, JSON-LD, CTA detection, PageSpeed, and SEO/GEO/AIO checks.
 
-SCOPE means **Search & Content Optimization Performance Engine**. It distinguishes **AI Answer Readiness**, which can be measured from crawl evidence, from **AI visibility**, which requires platform citation, referral, or licensed monitoring data.
+SCOPE means **Search & Content Optimization Performance Engine**. It distinguishes **AIO Answer Readiness**, which can be measured from crawl evidence, from **AI visibility**, which requires platform citation, referral, or licensed monitoring data.
 
 ## Behavior and crawl scope
 

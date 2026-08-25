@@ -134,7 +134,7 @@ function pageSection(page: PageResult, index: number, config: AuditReport['confi
     else for (const schema of page.suggestedSchemas) children.push(bullet(`${schema.type} (${schema.confidence} confidence) — ${schema.reason}`));
   }
   if (page.aio) {
-    children.push(heading(`AI Answer Readiness — ${page.aio.score}/100`, 3));
+    children.push(heading(`AIO Answer Readiness — ${page.aio.score}/100`, 3));
     children.push(body(`Readiness: ${page.aio.label.replaceAll('_', ' ')}. AI visibility is not measured without platform citation or referral data.`));
     children.push(dataTable(
       ['Access', 'Extractability', 'Evidence', 'Entity clarity', 'Intent coverage', 'Freshness', 'Multimodal'],
@@ -217,7 +217,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
       report.priorities.map(item => [item.rank, item.impact, item.effort, item.area, item.affectedPages, item.recommendation]),
       [650, 900, 900, 1050, 800, 5260]
     ),
-    heading('AI answer readiness', 1),
+    heading('AIO Answer Readiness', 1),
     body(`Average readiness score: ${averageAio}/100 across ${aioPages.length} analyzed pages. This measures technical and content readiness—not verified inclusion, ranking, or citation in an AI answer.`),
     dataTable(
       ['AI crawler', 'Starting-page access', 'Interpretation'],
