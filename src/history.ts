@@ -110,6 +110,10 @@ export async function getDomainTrend(domainId: string) {
   if (!historyEnabled()) return null;
   return db().domain.findUnique({ where: { id: domainId }, include: { aliases: { select: { normalizedDomain: true, rawDomain: true, createdAt: true } }, runs: { orderBy: { generatedAt: 'asc' }, select: { id: true, rawStartUrl: true, generatedAt: true, status: true, scanType: true, pageCount: true, fetchedCount: true, sitemapUrlCount: true, criticalCount: true, warningCount: true, infoCount: true, orphanPageCount: true, averageClickDepth: true, staleContentCount: true, nearDuplicateGroups: true, headingViolations: true, mixedContentPages: true, canonicalSelfRate: true, canonicalChains: true, canonicalNon200: true, crawlWasteUrls: true, schemaCoverage: true, indexableRate: true, gscAveragePosition: true, gscPeriodStart: true, gscPeriodEnd: true, ga4PeriodStart: true, ga4PeriodEnd: true, averageLcp: true, averageCls: true, averageInp: true, averageTbt: true, previousRunId: true, comparisonStatus: true, comparisonNotes: true, deltas: { select: { fingerprint: true, state: true } } } }, sourceMerges: { select: { id: true, sourceDomainId: true, targetDomainId: true, performedAt: true, performedBy: true, reason: true } }, targetMerges: { select: { id: true, sourceDomainId: true, targetDomainId: true, performedAt: true, performedBy: true, reason: true } } } });
 }
+export async function locateHistoricalRun(runId: string) {
+  if (!historyEnabled()) return null;
+  return db().auditRun.findUnique({ where: { id: runId }, select: { id: true, domainId: true, generatedAt: true, comparisonStatus: true } });
+}
 
 const safeStoredPath = (stored: string, outputRoot: string) => {
   const target = resolve(stored), root = resolve(outputRoot), rel = relative(root, target);

@@ -6,6 +6,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Improved report quality with rule-specific actions, stable run-history links, normalized orphan detection, interpreted redirect classifications, complete gated-auth exclusion, actionable JSON-LD syntax/property findings, search-operator filtering, evidence-weighted GSC cannibalization, missing-aware GA4 engagement rates, accessible link-name extraction, distinct image suggestions, collapsed social-share inventory, and wider report columns.
 - Added self-initializing MariaDB startup, automatic `.env` loading and migration deployment, Docker Compose recovery for local installations, database health states, and clear first-baseline guidance in the Trends dashboard.
 
 - Documentation synchronized with the current dashboard, crawler, imports, reports, and security model.

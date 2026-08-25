@@ -21,6 +21,21 @@ function schemaTypes(value: unknown): string[] {
   const own = typeof record['@type'] === 'string' ? [record['@type']] : Array.isArray(record['@type']) ? record['@type'].filter((v): v is string => typeof v === 'string') : [];
   return [...new Set([...own, ...schemaTypes(record['@graph'])])];
 }
+function jsonParseExplanation(raw: string, error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const position = Number(message.match(/position\s+(\d+)/i)?.[1]);
+  if (!Number.isFinite(position)) return message;
+  const before = raw.slice(0, position), line = before.split('\n').length, column = position - before.lastIndexOf('\n');
+  const hint = /unexpected end/i.test(message) ? 'Check for a missing closing brace, bracket, or quote.' : /property name|double-quoted/i.test(message) ? 'Check for an unquoted property name or trailing comma.' : /string/i.test(message) ? 'Check for an unescaped quote or control character inside a string.' : 'Inspect the surrounding punctuation and value type.';
+  return `Line ${line}, column ${column}: ${message}. ${hint}`;
+}
+function schemaValidationIssues(value: unknown): string[] {
+  const required: Record<string, string[]> = { Article: ['headline', 'author', 'datePublished'], BlogPosting: ['headline', 'author', 'datePublished'], Product: ['name'], Review: ['itemReviewed', 'reviewRating', 'author'], AggregateRating: ['ratingValue', 'reviewCount'], FAQPage: ['mainEntity'], Organization: ['name', 'url'], BreadcrumbList: ['itemListElement'] };
+  const nodes: Record<string, unknown>[] = [];
+  const visit = (item: unknown) => { if (Array.isArray(item)) item.forEach(visit); else if (item && typeof item === 'object') { const record = item as Record<string, unknown>; nodes.push(record); if (record['@graph']) visit(record['@graph']); } };
+  visit(value);
+  return nodes.flatMap(node => (typeof node['@type'] === 'string' ? [node['@type']] : Array.isArray(node['@type']) ? node['@type'].filter((type): type is string => typeof type === 'string') : []).flatMap(type => (required[type] ?? []).filter(property => node[property] === undefined || node[property] === '').map(property => `${type} is missing core property “${property}”`)));
+}
 
 export function suggestSchemas(page: Pick<PageResult, 'url'|'title'|'h1s'|'h2s'|'text'|'schemas'>): SuggestedSchema[] {
   const existing = new Set(page.schemas.flatMap(schema => schema.types).map(type => type.toLowerCase()));
@@ -100,7 +115,8 @@ function findingsFor(page: Pick<PageResult, 'title'|'metaDescription'|'metaDescr
   if (!archive && page.wordCount < 150) out.push({ category: 'geo', severity: 'warning', rule: 'thin_content', message: `Only ${page.wordCount} visible words were extracted.` });
   if (!archive && page.h2s.length === 0) out.push({ category: 'aio', severity: 'info', rule: 'answer_structure', message: 'No H2 sections were found; clear topical sections may improve extractability.' });
   if (!archive && page.schemas.length === 0) out.push({ category: 'geo', severity: 'info', rule: 'schema_missing', message: 'No JSON-LD markup was found.' });
-  if (page.schemas.some(s => !s.validJson)) out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: 'At least one JSON-LD block is invalid JSON.' });
+  for (const [index, schema] of page.schemas.entries()) if (!schema.validJson) out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: `JSON-LD block ${index + 1} is invalid: ${schema.error ?? 'unknown parse error'}`, evidence: schema.raw.slice(0, 500) });
+  for (const [index, schema] of page.schemas.entries()) for (const issue of schema.validationIssues ?? []) out.push({ category: 'seo', severity: 'warning', rule: 'schema_missing_core_property', message: `JSON-LD block ${index + 1}: ${issue}.`, evidence: schema.types.join(', ') });
   if (archive) out.push({ category: 'seo', severity: page.pageType === 'search_archive' ? 'warning' : 'info', rule: 'indexable_archive_review', message: `Indexable ${page.pageType.replaceAll('_', ' ')} detected; confirm that indexing, canonicalization, pagination, and listing quality are intentional.` });
   return out;
 }
@@ -136,15 +152,19 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const headings: Heading[] = $('h1,h2,h3,h4,h5,h6').map((_, el) => ({ text: cleanText($(el).text()), level: Number(el.tagName.slice(1)) as Heading['level'] })).get().filter(h => h.text);
   const schemas: SchemaMarkup[] = $('script[type="application/ld+json" i]').map((_, el) => {
     const raw = $(el).html()?.trim() ?? '';
-    try { const parsed: unknown = JSON.parse(raw); return { raw, parsed, types: schemaTypes(parsed), validJson: true }; }
-    catch (error) { return { raw, parsed: null, types: [], validJson: false, error: String(error) }; }
+    try { const parsed: unknown = JSON.parse(raw); return { raw, parsed, types: schemaTypes(parsed), validJson: true, validationIssues: schemaValidationIssues(parsed) }; }
+    catch (error) { return { raw, parsed: null, types: [], validJson: false, error: jsonParseExplanation(raw, error) }; }
   }).get();
   const text = cleanText($('main').first().text() || $('body').text());
   const paragraphCount = $('main p,article p').filter((_, paragraph) => cleanText($(paragraph).text()).length > 0).length;
   const contentMetrics = measureReadability(text, html, paragraphCount);
   const links: LinkInfo[] = $('a[href]').map((_, el) => {
-    const url = normaliseUrl($(el).attr('href') ?? '', finalUrl);
-    return url ? { text: cleanText($(el).text()), url, internal: sameHost(url, finalUrl) } : null;
+    const element = $(el), url = normaliseUrl(element.attr('href') ?? '', finalUrl);
+    const labelledBy = (element.attr('aria-labelledby') ?? '').split(/\s+/).filter(Boolean).map(id => cleanText($(`#${id}`).text())).filter(Boolean).join(' ');
+    const hiddenText = element.find('.screen-reader-text,.sr-only,.visually-hidden,[class*="screen-reader"],[class*="visually-hidden"]').text();
+    const text = cleanText(element.text() || element.attr('aria-label') || labelledBy || element.attr('title') || hiddenText);
+    if (!url || /^skip (?:to )?(?:main )?content$/i.test(text)) return null;
+    return { text, url, internal: sameHost(url, finalUrl) };
   }).get().filter((v): v is LinkInfo => Boolean(v));
   const uniqueInternalLinks = new Set(links.filter(link => link.internal).map(link => link.url));
   const uniqueExternalLinks = new Set(links.filter(link => !link.internal).map(link => link.url));
@@ -162,7 +182,8 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     const cdnManaged = !/\.[a-z0-9]{2,5}$/i.test(detected) && /^[a-f0-9_-]{20,}$/i.test(detected);
     return { src, alt: cleanText($(image).attr('alt')), filename: cdnManaged ? '[CDN-generated asset identifier]' : detected, cdnManaged };
   }).get().filter(Boolean);
-  const imageRecommendations: ImageRecommendation[] = $('img[src]').map((_, image) => {
+  const usedAltSuggestions = new Map<string, number>();
+  const imageRecommendations: ImageRecommendation[] = $('img[src]').map((imageIndex, image) => {
     const element = $(image);
     const src = normaliseUrl(element.attr('src') ?? '', finalUrl);
     if (!src) return null;
@@ -176,8 +197,12 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     const unoptimized = !opaqueCdnAsset && (!stem || /^(img|image|photo|pic|dsc|untitled|screenshot)[-_ ]?\d*$/i.test(stem) || /^[a-f0-9_-]{12,}$/i.test(stem) || /\s|_/.test(stem));
     if (currentAlt && !unoptimized) return null;
     const context = cleanText(element.closest('figure').find('figcaption').first().text() || element.parent().text() || element.attr('title')).slice(0, 180);
-    const subject = context || primaryKeyword;
-    const suggestedAlt = cleanText(`${subject}${subject.toLowerCase().includes(primaryKeyword.toLowerCase()) ? '' : ` — ${primaryKeyword}`}`).slice(0, 160);
+    const filenameSubject = cleanText(stem.replace(/[-_]+/g, ' '));
+    const subject = context || (!opaqueCdnAsset && filenameSubject ? filenameSubject : '');
+    let suggestedAlt = subject ? cleanText(`${subject}${subject.toLowerCase().includes(primaryKeyword.toLowerCase()) ? '' : ` — ${primaryKeyword}`}`).slice(0, 160) : `Manual review needed: image ${imageIndex + 1} on “${cleanText(h1s[0] || title)}”`;
+    const duplicateCount = usedAltSuggestions.get(suggestedAlt.toLowerCase()) ?? 0;
+    usedAltSuggestions.set(suggestedAlt.toLowerCase(), duplicateCount + 1);
+    if (duplicateCount) suggestedAlt = `Manual review needed: distinct image ${imageIndex + 1} on “${cleanText(h1s[0] || title)}”`;
     return {
       src, currentAlt, currentFilename,
       issue: !currentAlt && unoptimized ? 'both' : !currentAlt ? 'missing_alt' : 'unoptimized_filename',

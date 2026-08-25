@@ -54,3 +54,17 @@ test('captures hierarchy, staleness, and active mixed-content measurements', () 
   assert.deepEqual(result.mixedContentResources, ['http://cdn.example.test/site.css']);
   assert.ok(result.findings.some(finding => finding.rule === 'mixed_content'));
 });
+
+test('uses accessible link names and excludes skip-navigation links', () => {
+  const html = '<title>Links</title><main id="main"><h1>Links</h1><a href="#main">Skip to content</a><a href="/share" aria-label="Share on Bluesky"><svg></svg></a><span id="next-label" class="screen-reader-text">Next page</span><a href="/page/2" aria-labelledby="next-label"><svg></svg></a></main>';
+  const result = extractPage('https://example.test/', 'https://example.test/', 200, 'text/html', html, new Headers());
+  assert.deepEqual(result.links.map(link => link.text), ['Share on Bluesky', 'Next page']);
+});
+
+test('reports actionable JSON-LD syntax and core-property issues separately', () => {
+  const html = '<title>Schema</title><h1>Schema</h1><script type="application/ld+json">{"@type":"Article",}</script><script type="application/ld+json">{"@type":"Article","headline":"Test"}</script>';
+  const result = extractPage('https://example.test/', 'https://example.test/', 200, 'text/html', html, new Headers());
+  assert.match(result.schemas[0].error ?? '', /line|position/i);
+  assert.ok(result.findings.some(finding => finding.rule === 'schema_invalid_json' && /invalid:/i.test(finding.message)));
+  assert.ok(result.findings.some(finding => finding.rule === 'schema_missing_core_property' && /author/.test(finding.message)));
+});

@@ -69,12 +69,17 @@ export function aggregateKeywords(pages: PageResult[], maximum: number): Keyword
 
 export function detectCannibalization(keywords: KeywordCandidate[]): CannibalizationIssue[] {
   return keywords.flatMap(keyword => {
-    if ((keyword.searchConsole?.pages.length ?? 0) > 1) return [{
+    if ((keyword.searchConsole?.pages.length ?? 0) > 1) {
+      const metrics = keyword.searchConsole!.pageMetrics ?? {};
+      const observedPages = keyword.searchConsole!.pages.map(url => ({ url, score: keyword.pages.find(page => page.url === url)?.score ?? 0, ...metrics[url] })).sort((a, b) => (b.impressions ?? 0) - (a.impressions ?? 0));
+      const totalImpressions = observedPages.reduce((sum, page) => sum + (page.impressions ?? 0), 0), leaderShare = totalImpressions ? (observedPages[0].impressions ?? 0) / totalImpressions : 0;
+      if (leaderShare >= 0.9) return [];
+      return [{
       keyword: keyword.keyword,
-      severity: keyword.searchConsole!.pages.length > 2 ? 'likely' as const : 'possible' as const,
-      pages: keyword.searchConsole!.pages.map(url => ({ url, score: keyword.pages.find(page => page.url === url)?.score ?? 0 })),
-      reason: `Google Search Console reports this query across ${keyword.searchConsole!.pages.length} landing pages; review intent, internal linking, and ranking stability.`
-    }];
+      severity: leaderShare < 0.65 && observedPages.length > 2 ? 'likely' as const : 'possible' as const,
+      pages: observedPages,
+      reason: `Google Search Console reports meaningful visibility across ${observedPages.length} landing pages. The leading page holds ${Math.round(leaderShare * 100)}% of observed impressions; review page intent, internal linking, and ranking stability.`
+    }]; }
     if (!keyword.pages.length) return [];
     const contenders = keyword.pages.filter(page => page.score >= Math.max(5, keyword.pages[0].score * 0.65));
     if (contenders.length < 2) return [];

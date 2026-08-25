@@ -110,6 +110,7 @@ export interface SchemaMarkup {
   types: string[];
   validJson: boolean;
   error?: string;
+  validationIssues?: string[];
 }
 
 export interface SuggestedSchema {
@@ -147,7 +148,7 @@ export interface KeywordCandidate {
   confidence: number;
   pages: Array<{ url: string; score: number; evidence: string[] }>;
   ranking: RankingResult | null;
-  searchConsole?: { clicks: number; impressions: number; ctr: number; position: number; pages: string[] };
+  searchConsole?: { clicks: number; impressions: number; ctr: number; position: number; pages: string[]; pageMetrics?: Record<string, { clicks: number; impressions: number; ctr: number; position: number }> };
 }
 
 export interface RankingResult {
@@ -217,17 +218,19 @@ export interface PageResult {
   findings: Finding[];
   pageSpeed: PageSpeedResult[];
   crawledAt: string;
-  analytics?: { sessions: number; activeUsers: number; engagedSessions: number; engagementRate: number; keyEvents: number };
+  analytics?: { sessions: number; activeUsers: number; engagedSessions: number; engagementRate: number | null; keyEvents: number };
 }
 
 export interface CannibalizationIssue {
   keyword: string;
   severity: "possible" | "likely";
-  pages: Array<{ url: string; score: number }>;
+  pages: Array<{ url: string; score: number; clicks?: number; impressions?: number; position?: number }>;
   reason: string;
 }
 
 export interface AuditReport {
+  /** Stable local run identifier used to deep-link report findings back to retained history. */
+  historyRunId?: string;
   domain: string;
   config: Omit<AuditConfig, "pageSpeedApiKey" | "serp" | "imageAnalysis" | "gscCsv" | "gscCsvFiles" | "gscQueryPageCsv" | "ga4Csv"> & { serpConfigured: boolean; imageAnalysisConfigured: boolean };
   summary: {
@@ -284,7 +287,9 @@ export interface RedirectResult {
   chain: string[];
   finalUrl: string;
   finalStatus: number;
-  classification?: 'redirect' | 'gated_authentication_flow';
+  classification?: 'deliberate' | 'automatic' | 'unknown';
+  sourceStatus?: number;
+  interpretation?: string;
 }
 
 export interface BrokenLinkResult {

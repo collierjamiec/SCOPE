@@ -41,7 +41,7 @@ export function mergeGscExport(keywords: KeywordCandidate[], csv: string | undef
   if (!csv?.trim()) return 0;
   const rows = parseCsv(csv); const byKeyword = new Map(keywords.map(keyword => [keyword.keyword.toLowerCase(), keyword]));
   for (const row of rows) {
-    const phrase = field(row, ['query', 'queries', 'topqueries']).trim(); if (!phrase) continue;
+    const phrase = field(row, ['query', 'queries', 'topqueries']).trim(); if (!phrase || /^(?:site|cache|related|info|filetype|inurl|intitle|allinurl|allintitle):/i.test(phrase)) continue;
     const page = absolutePage(field(row, ['page', 'pages', 'toppages']), origin);
     const clicks = number(field(row, ['clicks'])), impressions = number(field(row, ['impressions']));
     const ctrRaw = number(field(row, ['ctr'])); const ctr = field(row, ['ctr']).includes('%') ? ctrRaw / 100 : ctrRaw;
@@ -52,11 +52,16 @@ export function mergeGscExport(keywords: KeywordCandidate[], csv: string | undef
       keywords.push(keyword); byKeyword.set(phrase.toLowerCase(), keyword);
     }
     if (!keyword) continue;
-    const existing = keyword.searchConsole ?? { clicks: 0, impressions: 0, ctr: 0, position: 0, pages: [] };
+    const existing = keyword.searchConsole ?? { clicks: 0, impressions: 0, ctr: 0, position: 0, pages: [], pageMetrics: {} };
     const totalImpressions = existing.impressions + impressions;
     existing.position = totalImpressions ? ((existing.position * existing.impressions) + (position * impressions)) / totalImpressions : position;
     existing.clicks += clicks; existing.impressions = totalImpressions; existing.ctr = totalImpressions ? existing.clicks / totalImpressions : ctr;
     if (page && !existing.pages.includes(page)) existing.pages.push(page);
+    if (page) {
+      const previous = existing.pageMetrics?.[page] ?? { clicks: 0, impressions: 0, ctr: 0, position: 0 };
+      const pageImpressions = previous.impressions + impressions;
+      (existing.pageMetrics ??= {})[page] = { clicks: previous.clicks + clicks, impressions: pageImpressions, ctr: pageImpressions ? (previous.clicks + clicks) / pageImpressions : ctr, position: pageImpressions ? ((previous.position * previous.impressions) + (position * impressions)) / pageImpressions : position };
+    }
     keyword.searchConsole = existing;
   }
   return rows.length;
@@ -116,9 +121,10 @@ export function applyGa4Export(pages: PageResult[], csv: string | undefined, ori
     const rawPath = field(row, ['landingpage', 'landingpagequerystring', 'pagepath', 'pagepathquerystring', 'page']); if (!rawPath || rawPath === '(not set)') continue;
     let path: string; try { path = new URL(rawPath, origin).pathname.replace(/\/$/, '') || '/'; } catch { continue; }
     const page = pageMap.get(path); if (!page) continue;
+    const engagementRaw = field(row, ['engagementrate']);
     page.analytics = {
       sessions: number(field(row, ['sessions'])), activeUsers: number(field(row, ['activeusers', 'users'])),
-      engagedSessions: number(field(row, ['engagedsessions'])), engagementRate: number(field(row, ['engagementrate'])) / (field(row, ['engagementrate']).includes('%') ? 100 : 1),
+      engagedSessions: number(field(row, ['engagedsessions'])), engagementRate: engagementRaw === '' ? null : number(engagementRaw) / (engagementRaw.includes('%') ? 100 : 1),
       keyEvents: number(field(row, ['keyevents', 'conversions']))
     };
   }

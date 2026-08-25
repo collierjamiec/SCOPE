@@ -11,7 +11,7 @@ import { convertDocxToPdf } from './pdf.js';
 import { loadPageSpeedApiKey, removePageSpeedApiKey, savePageSpeedApiKey } from './pagespeed.js';
 import { createGoogleAuthorization, exchangeGoogleCode, fetchSearchConsoleQueryPages, listSearchConsoleSites, loadGoogleCredentials, removeGoogleCredentials, saveGoogleCredentials } from './google-search-console.js';
 import type { AuditConfig, AuditReport } from './types.js';
-import { deleteDomainHistory, deleteRunHistory, getDomainTrend, historyEnabled, historyStatus, listTrendDomains, mergeDomains, persistAuditRun } from './history.js';
+import { deleteDomainHistory, deleteRunHistory, getDomainTrend, historyEnabled, historyStatus, listTrendDomains, locateHistoricalRun, mergeDomains, persistAuditRun } from './history.js';
 import { trendsHtml } from './trends-dashboard.js';
 
 try { process.loadEnvFile(); } catch { /* Environment variables may be supplied by the host. */ }
@@ -47,6 +47,7 @@ function artifact(response: ServerResponse, path: string, type: string, name: st
 async function run(job: Job, config: AuditConfig) {
   try {
     const report = await crawlSite(config, progress => { job.progress = progress; sendEvent(job, 'progress', progress); }, { isPaused: () => job.status === 'paused', isCancelled: () => job.cancelRequested });
+    report.historyRunId = job.id;
     if (job.discardRequested) { job.status = 'cancelled'; sendEvent(job, 'failed', { error: 'Crawl cancelled. No report was generated.' }); return; }
     const safeDomain = report.domain.replace(/[^a-z0-9.-]+/gi, '_');
     const directory = resolve(outputRoot, safeDomain, job.id);
@@ -130,6 +131,9 @@ const rowsBeforeExecutive=rows;rows=kind=>kind==='executive'?'<tr><td style="pad
 </script></body></html>`;
 
 const servedHtml = html
+  .replaceAll("+(p.analytics.engagementRate*100).toFixed(1)+'%'", "+(p.analytics.engagementRate==null?'Unavailable in export':(p.analytics.engagementRate*100).toFixed(1)+'%')")
+  .replaceAll("'+(k.pages[0]?.score??'n/a')+'", "'+(k.searchConsole?'n/a':(k.pages[0]?.score??'n/a'))+'")
+  .replace('Click <b>Share this report → Download File → Download CSV</b>, then upload that CSV here.', 'For reliable engagement rate, use <b>Explore → Free form</b>, set <b>Landing page + query string</b> as the row dimension, add Sessions, Active users, Engaged sessions, Engagement rate, and Key events as metrics, then export CSV. A standard Landing page report is accepted, but may omit Engagement rate.')
   .replace('<button type="button" id="settings-button" aria-label="Open audit settings" title="Audit settings">⚙ Settings</button>', '<button type="button" id="settings-button" aria-label="Settings" title="Settings" style="appearance:none;background:none;border:0;border-radius:0;color:#f28c28;font-size:28px;line-height:1;padding:0 8px">⚙</button>')
   .replace('<div class="brand"><span>SCOPE</span> / SITE INTELLIGENCE</div>', '<div class="brand"><span class="scope-mark" aria-hidden="true"><i></i></span><span class="brand-copy"><span>SCOPE</span><small>/ SITE INTELLIGENCE</small></span></div>')
   .replace('<div class="pill">Robots-aware • Indexable pages only</div>', '<div style="display:flex;align-items:center;gap:10px"><a href="/trends" style="color:#0c7067;font-weight:850;text-decoration:none">Historical trends</a><div class="pill">Robots-aware • Indexable pages only</div></div>')
@@ -152,6 +156,7 @@ const server = createServer(async (request, response) => {
     const mergeMatch = url.pathname.match(/^\/api\/v1\/trends\/domains\/([^/]+)\/merge$/);
     if (request.method === 'POST' && mergeMatch) { requireLocalOrigin(request); const input = await body(request), reason = String(input.reason ?? '').trim(); if (!reason) return json(response, 400, { error: 'Record a reason for the domain migration.' }); await mergeDomains(String(input.sourceDomainId ?? ''), mergeMatch[1], reason); return json(response, 200, { merged: true }); }
     const historyRunMatch = url.pathname.match(/^\/api\/v1\/trends\/runs\/([^/]+)$/);
+    if (request.method === 'GET' && historyRunMatch) { const run = await locateHistoricalRun(historyRunMatch[1]); return run ? json(response, 200, run) : json(response, 404, { error: 'Historical run not found.' }); }
     if (request.method === 'DELETE' && historyRunMatch) { requireLocalOrigin(request); const input = await body(request); await deleteRunHistory(historyRunMatch[1], String(input.confirmation ?? ''), outputRoot); return json(response, 200, { deleted: true }); }
     if (request.method === 'GET' && url.pathname === '/api/pagespeed/status') return json(response, 200, { configured: Boolean(await loadPageSpeedApiKey() ?? process.env.PAGESPEED_API_KEY) });
     if (request.method === 'POST' && url.pathname === '/api/pagespeed/credentials') { requireLocalOrigin(request); const input = await body(request), apiKey = String(input.apiKey ?? '').trim(); if (apiKey.length < 20) return json(response, 400, { error: 'Enter a valid Google PageSpeed API key.' }); await savePageSpeedApiKey(apiKey); return json(response, 200, { saved: true }); }

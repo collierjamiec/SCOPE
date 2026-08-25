@@ -77,8 +77,9 @@ function horizontalRule(): Paragraph {
 
 function domainLinkRows(report: AuditReport, internal: boolean): Array<[string, string]> {
   const grouped = new Map<string, { anchor: string; destination: string; occurrences: number }>();
-  for (const link of report.pages.flatMap(page => page.links).filter(item => item.internal === internal)) {
-    const anchor = link.text || '[No anchor text]';
+  const social = (url: string) => { try { return /(?:facebook\.com|reddit\.com|bsky\.app|threads\.net|twitter\.com|x\.com|linkedin\.com|pinterest\.com)/i.test(new URL(url).hostname); } catch { return false; } };
+  for (const link of report.pages.flatMap(page => page.links).filter(item => item.internal === internal && !/^skip (?:to )?(?:main )?content$/i.test(item.text) && !social(item.url))) {
+    const anchor = link.text || '[No accessible name]';
     const key = `${anchor}\u0000${link.url}`;
     const current = grouped.get(key) ?? { anchor, destination: link.url, occurrences: 0 };
     current.occurrences += 1;
@@ -130,6 +131,7 @@ function pageSection(page: PageResult, index: number, config: AuditReport['confi
     if (!page.schemas.length) children.push(body('None detected.'));
     for (const schema of page.schemas) {
       children.push(body(schema.validJson ? `Valid: ${schema.types.join(', ') || 'Type not declared'}` : `Invalid JSON: ${schema.error ?? 'Unable to parse'}`));
+      for (const issue of schema.validationIssues ?? []) children.push(bullet(`Structured-data property issue: ${issue}. Add the property only when it is supported by visible page content.`));
     }
     children.push(horizontalRule(), heading('Suggested Schema', 3));
     if (!page.suggestedSchemas?.length) children.push(body('No additional schema type was confidently suggested from the visible page content.'));
@@ -141,7 +143,7 @@ function pageSection(page: PageResult, index: number, config: AuditReport['confi
     children.push(dataTable(
       ['Access', 'Extractability', 'Evidence', 'Entity clarity', 'Intent coverage', 'Freshness', 'Multimodal'],
       [[page.aio.dimensions.accessibility, page.aio.dimensions.extractability, page.aio.dimensions.evidence, page.aio.dimensions.entityClarity, page.aio.dimensions.intentCoverage, page.aio.dimensions.freshness, page.aio.dimensions.multimodal]],
-      [1337, 1337, 1337, 1337, 1337, 1337, 1338]
+      [950, 1650, 1150, 1350, 1450, 1200, 1610]
     ));
     for (const indicator of page.aio.indicators.filter(item => item.status !== 'pass')) children.push(bullet(`${indicator.label}: ${indicator.recommendation ?? indicator.evidence}`));
   }
@@ -202,6 +204,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
     || a.keyword.localeCompare(b.keyword));
   const ga4Pages = report.pages.filter(page => page.analytics).sort((a, b) => b.analytics!.sessions - a.analytics!.sessions || a.url.localeCompare(b.url));
   const periodText = (range: AuditReport['importedData']['gscDateRange'] | AuditReport['importedData']['ga4DateRange'] | undefined, unavailable: string) => range ? `${range.start && range.end ? `${range.start} through ${range.end}` : range.label} (${range.source})` : unavailable;
+  const historyUrl = report.historyRunId ? `http://127.0.0.1:4173/trends?run=${encodeURIComponent(report.historyRunId)}` : '';
   const children: Array<Paragraph | Table> = [
     new Paragraph({ spacing: { before: 320, after: 80 }, children: [new TextRun({ text: 'SCOPE WEBSITE AUDIT', bold: true, size: 46, color: NAVY, font: 'Arial' })] }),
     new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: report.domain, size: 28, color: MUTED, font: 'Arial' })] }),
@@ -222,7 +225,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
     body('Priority combines issue severity and the number of affected pages. Effort is an implementation estimate and should be validated against the site platform.'),
     dataTable(
       ['Rank', 'Impact', 'Effort', 'Area', 'Affected', 'Recommended action'],
-      report.priorities.map(item => [item.rank, item.impact, item.effort, item.area, item.affectedPages, item.recommendation]),
+      report.priorities.map(item => [item.rank, item.impact, item.effort, item.area, item.affectedPages, `${item.recommendation}${historyUrl ? ` View retained run: ${historyUrl}` : ''}`]),
       [850, 1000, 1000, 900, 1050, 4560]
     ),
     heading('AIO Answer Readiness', 1),
@@ -239,7 +242,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
       [
         ['Duplicate title groups', duplicateGroups(report.pages.map(page => page.title)), 'Duplicate description groups', duplicateGroups(report.pages.map(page => page.metaDescription))],
         ['Missing titles / descriptions', `${report.pages.filter(page => !page.title).length} / ${report.pages.filter(page => !page.metaDescription).length}`, 'Missing H1 / canonical', `${report.pages.filter(page => !page.h1s.length).length} / ${report.pages.filter(page => !page.canonical).length}`],
-        ['Possible orphan pages', orphanCandidates, 'Pages with valid JSON-LD', report.pages.filter(page => page.schemas.some(schema => schema.validJson)).length],
+        ['Confirmed orphan pages', `${orphanCandidates} / ${report.pages.length} (${report.pages.length ? (orphanCandidates / report.pages.length * 100).toFixed(1) : '0.0'}%)${orphanCandidates >= report.pages.length * .9 ? ' — suspicious; verify crawl graph' : ''}`, 'Pages with valid JSON-LD', `${report.pages.filter(page => page.schemas.some(schema => schema.validJson)).length} / ${report.pages.length}`],
         ['Average word count', average(report.pages.map(page => page.wordCount)), 'Average response time', `${average(report.pages.map(page => page.responseTimeMs ?? 0).filter(Boolean))} ms`],
         ['Images missing alt text', report.pages.reduce((sum, page) => sum + (page.imagesMissingAltText ?? 0), 0), 'Canonical mismatches', report.pages.filter(page => page.canonicalMatchesUrl === false).length],
         ['Average click depth', report.summary.averageClickDepth?.toFixed(1) ?? 'n/a', 'Near-duplicate groups', report.summary.nearDuplicateGroups ?? 0],
@@ -258,7 +261,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
     children.push(dataTable(
       ['Sitemap', 'Type', 'Status', 'Entries', 'Page URLs', 'Child maps'],
       report.sitemaps.map(sitemap => [sitemap.url, sitemap.type, sitemap.status ?? 'n/a', sitemap.entries, sitemap.pageUrls, sitemap.childSitemaps]),
-      [3700, 1300, 900, 1100, 1200, 1160]
+      [3460, 1760, 820, 1000, 1100, 1220]
     ));
   }
   if (report.sitemaps.some(sitemap => sitemap.error)) {
@@ -268,7 +271,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   if (!report.redirects.length) children.push(body('No redirect chains were encountered during the crawl.'));
   else children.push(dataTable(
     ['Type', 'Requested URL', 'Linked from', 'Redirect chain', 'Final status'],
-    report.redirects.map(redirect => [redirect.classification === 'gated_authentication_flow' ? 'Gated/auth' : 'Redirect', redirect.source, redirect.sourcePages.join(' | ') || 'Seed or sitemap', redirect.chain.join(' → '), redirect.finalStatus]),
+    report.redirects.map(redirect => [`${redirect.classification ?? 'unknown'} (HTTP ${redirect.sourceStatus ?? 'n/a'})`, redirect.source, redirect.sourcePages.join(' | ') || 'Seed or sitemap', `${redirect.chain.join(' → ')}\n${redirect.interpretation ?? ''}`, redirect.finalStatus]),
     [1100, 2000, 2000, 3160, 1000]
   ));
   children.push(heading('Broken internal links', 1));
@@ -306,8 +309,8 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   if (!ga4Pages.length) children.push(body('No GA4 landing-page rows matched analyzed pages.'));
   else children.push(dataTable(
     ['Landing page', 'Sessions', 'Active users', 'Engaged sessions', 'Engagement rate', 'Key events'],
-    ga4Pages.map(page => [page.url, page.analytics!.sessions, page.analytics!.activeUsers, page.analytics!.engagedSessions, `${(page.analytics!.engagementRate * 100).toFixed(1)}%`, page.analytics!.keyEvents]),
-    [3500, 1050, 1100, 1250, 1250, 1210]
+    ga4Pages.map(page => [page.url, page.analytics!.sessions, page.analytics!.activeUsers, page.analytics!.engagedSessions, page.analytics!.engagementRate === null ? 'Unavailable in export' : `${(page.analytics!.engagementRate * 100).toFixed(1)}%`, page.analytics!.keyEvents]),
+    [3150, 950, 1050, 1200, 1800, 1170]
   ));
 
   children.push(heading('Keyword cannibalization', 1));
@@ -315,7 +318,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   for (const issue of report.cannibalization) {
     children.push(heading(`${issue.severity.toUpperCase()}: ${issue.keyword}`, 2));
     children.push(body(issue.reason));
-    for (const page of issue.pages) children.push(bullet(`${page.url} — targeting score ${page.score}`));
+    for (const page of issue.pages) children.push(bullet(`${page.url} — ${page.impressions === undefined ? `inferred targeting score ${page.score}` : `${page.clicks ?? 0} clicks, ${page.impressions} impressions, average position ${page.position?.toFixed(1) ?? 'unavailable'}`}`));
   }
 
   children.push(heading('Page-by-page findings', 1));
@@ -332,8 +335,11 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
 
   const internalInventory = domainLinkRows(report, true);
   const externalInventory = domainLinkRows(report, false);
+  const socialLinks = report.pages.flatMap(page => page.links.map(link => ({ page: page.url, link }))).filter(item => { try { return /(?:facebook\.com|reddit\.com|bsky\.app|threads\.net|twitter\.com|x\.com|linkedin\.com|pinterest\.com)/i.test(new URL(item.link.url).hostname); } catch { return false; } });
+  const socialPlatforms = [...new Set(socialLinks.map(item => new URL(item.link.url).hostname.replace(/^www\./, '')))].sort();
   children.push(heading('Domain link inventory', 1, true));
-  children.push(body('The document lists every unique anchor-text and destination combination across analyzed pages; the occurrence count is shown in parentheses. The accompanying links.csv retains every individual occurrence and its source page.'));
+  children.push(body('The document lists every meaningful unique anchor-text and destination combination across analyzed pages; the occurrence count is shown in parentheses. Skip-navigation links are omitted and repeated social-share destinations are summarized. The accompanying links.csv retains ordinary individual occurrences and their source pages.'));
+  if (socialPlatforms.length) children.push(body(`Templated social-share links were collapsed: ${socialPlatforms.join(', ')} appeared across ${new Set(socialLinks.map(item => item.page)).size} page(s).`));
   children.push(heading(`Internal links (${internalInventory.length} unique anchor/destination combinations)`, 2));
   if (!internalInventory.length) children.push(body('None found.'));
   else children.push(pairedLinkTable(internalInventory));

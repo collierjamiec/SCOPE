@@ -69,6 +69,7 @@ SERP_API_KEY. The endpoint adapter contract is documented in README.md.`);
   const outputRoot = option('out') ?? 'audit-output';
   const safeDomain = report.domain.replace(/[^a-z0-9.-]+/gi, '_');
   const runId = randomUUID();
+  report.historyRunId = runId;
   const directory = `${outputRoot}/${safeDomain}/${runId}`;
   await mkdir(directory, { recursive: true });
   const documentName = auditDocumentFilename(new Date(report.generatedAt));

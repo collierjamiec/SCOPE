@@ -46,6 +46,18 @@ test('attaches GA4 landing-page metrics to matching pages', () => {
   assert.equal(pages[0].analytics?.engagementRate, 0.625);
 });
 
+test('preserves omitted GA4 engagement rate as unavailable instead of zero', () => {
+  const pages = [{ url: 'https://example.com/a', analytics: undefined }] as unknown as PageResult[];
+  applyGa4Export(pages, 'Landing page,Sessions,Active users,Engaged sessions,Key events\n/a,40,30,25,3\n', 'https://example.com');
+  assert.equal(pages[0].analytics?.engagementRate, null);
+});
+
+test('excludes diagnostic search-operator queries from keyword opportunities', () => {
+  const keywords: any[] = [];
+  mergeGscExport(keywords, 'Query,Clicks,Impressions,CTR,Position\nsite:example.com,2,20,10%,1\nreal topic,3,30,10%,4\n', 100, 'https://example.com');
+  assert.deepEqual(keywords.map(keyword => keyword.keyword), ['real topic']);
+});
+
 test('finds native GA4 headers after report metadata rows', () => {
   const pages = [{ url: 'https://example.com/a/', analytics: undefined }] as unknown as PageResult[];
   const csv = '# GA4 Landing page report\n# Date range: last 28 days\nLanding page + query string,Sessions,Active users,Engaged sessions,Engagement rate,Key events\n/a?utm_source=test,40,30,25,62.5%,3\n';

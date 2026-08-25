@@ -51,6 +51,8 @@ Open the displayed local URL, enter a starting page, and use the orange gear to 
 
 During a crawl, the dashboard shows live activity, fetched/analyzed/queued counts, throughput, ETA, and the current URL. Completed reports include priorities, pages, content, technical, AIO, keywords, GSC, GA4, images, and findings views.
 
+Report interpretation is intentionally conservative: authentication/OAuth chains and trailing-slash normalization are excluded from SEO redirects; redirects are labeled deliberate, automatic-pattern, or unknown with supporting interpretation; omitted GA4 metrics remain unavailable rather than becoming zero; diagnostic search operators such as `site:` are excluded from keyword opportunities; and GSC cannibalization is suppressed when one landing page holds at least 90% of observed impressions.
+
 ## Historical trends and MariaDB
 
 SCOPE retains every completed and intentionally saved partial audit in MariaDB. The normal dashboard startup is self-initializing: it loads `.env` automatically, uses the local-only bundled MariaDB configuration when `DATABASE_URL` is absent, starts the `mariadb` Docker Compose service when necessary, waits for it to become healthy, and applies pending schema migrations before opening the dashboard. Install and start Docker Desktop once, then use:
@@ -151,7 +153,7 @@ GA4 reporting periods are read from native `Start date` / `End date` export meta
 
 ## Google Analytics 4 imports
 
-Export a GA4 report with a primary dimension of **Landing page** or **Landing page + query string**. Recommended columns are Sessions, Active users, Engaged sessions, Engagement rate, and Key events. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows.
+For reliable engagement-rate data, create a GA4 **Explore → Free form** exploration with **Landing page + query string** as the row dimension and Sessions, Active users, Engaged sessions, Engagement rate, and Key events as metrics, then export CSV. The standard Landing page detail report is also accepted, but it may omit Engagement rate. SCOPE now preserves a missing metric as **Unavailable in export** instead of silently converting it to 0.0%. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows.
 
 Use the same GSC and GA4 period when possible. Uploaded CSV contents are processed locally and omitted from persisted audit configuration.
 

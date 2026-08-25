@@ -20,7 +20,13 @@ export function pagesCsv(report: AuditReport): string {
 
 export function linksCsv(report: AuditReport): string {
   const header = ['Source Page','Link Type','Anchor Text','Destination'];
-  const rows = report.pages.flatMap(page => page.links.map(link => [page.url, link.internal ? 'internal' : 'external', link.text || '[No anchor text]', link.url]));
+  const sharePlatform = (url: string) => { try { const host = new URL(url).hostname.replace(/^www\./, ''); return /(?:facebook\.com|reddit\.com|bsky\.app|threads\.net|twitter\.com|x\.com|linkedin\.com|pinterest\.com)/i.test(host) ? host : null; } catch { return null; } };
+  const shareLinks = report.pages.flatMap(page => page.links.map(link => ({ page, link, platform: sharePlatform(link.url) }))).filter(item => item.platform);
+  const platforms = [...new Set(shareLinks.map(item => item.platform!))].sort();
+  const rows = [
+    ...(platforms.length ? [['[Sitewide template summary]', 'external', `Standard social share links detected for ${platforms.join(', ')} across ${new Set(shareLinks.map(item => item.page.url)).size} pages`, '[Templated share destinations collapsed]']] : []),
+    ...report.pages.flatMap(page => page.links.filter(link => !sharePlatform(link.url)).map(link => [page.url, link.internal ? 'internal' : 'external', link.text || '[No accessible name]', link.url]))
+  ];
   return [header, ...rows].map(row => row.map(csv).join(',')).join('\n') + '\n';
 }
 
@@ -28,7 +34,7 @@ export function technicalCsv(report: AuditReport): string {
   const header = ['Type','Source Page','Anchor Text','Destination','HTTP Status','Redirect Chain','Details'];
   const rows = [
     ...report.brokenLinks.map(link => ['broken_link', link.sourcePage, link.anchorText, link.destination, link.status ?? '', '', link.error]),
-    ...report.redirects.map(redirect => [redirect.classification === 'gated_authentication_flow' ? 'gated_authentication_flow' : 'redirect', redirect.source, '', redirect.finalUrl, redirect.finalStatus, redirect.chain.join(' → '), `${redirect.classification === 'gated_authentication_flow' ? 'Intentional access flow; provider status is informational only. ' : ''}Linked from: ${redirect.sourcePages.join(' | ') || 'Seed or sitemap'}`]),
+    ...report.redirects.map(redirect => [`${redirect.classification ?? 'unknown'}_redirect`, redirect.source, '', redirect.finalUrl, redirect.finalStatus, redirect.chain.join(' → '), `${redirect.interpretation ?? 'Redirect intent was not classified.'} Source response: HTTP ${redirect.sourceStatus ?? 'unknown'}. Linked from: ${redirect.sourcePages.join(' | ') || 'Seed or sitemap'}`]),
     ...(report.externalPages ?? []).map(page => [`external_depth_${page.depth}`, page.sourcePages.join(' | '), '', page.url, page.status ?? '', page.redirectChain.join(' → '), page.error ?? `Final URL: ${page.finalUrl}; ${page.responseTimeMs ?? 'n/a'} ms`]),
     ...report.excludedPages.map(item => ['excluded', '', '', item.url, item.status ?? '', '', item.reason])
   ];

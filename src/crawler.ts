@@ -148,6 +148,13 @@ export function isTrailingSlashOnlyRedirect(source: string, finalUrl: string): b
     && trimSlash(from.pathname) === trimSlash(to.pathname)
     && from.pathname !== to.pathname;
 }
+export function classifySeoRedirect(source: string, finalUrl: string, chain: string[]): Pick<NonNullable<AuditReport['redirects'][number]>, 'classification'|'interpretation'> {
+  const values = [source, finalUrl, ...chain].map(value => new URL(value));
+  const automatic = values.some(url => /\/(?:attachment|author|feed|wp-admin|wp-login)(?:\/|$)/i.test(url.pathname) || [...url.searchParams.keys()].some(key => /^(?:attachment_id|p|page_id|redirect_to)$/i.test(key)));
+  if (automatic) return { classification: 'automatic', interpretation: 'Pattern resembles a CMS, attachment, login, or plugin-generated redirect. Confirm the responsible WordPress/CMS rule before editing content links.' };
+  const deliberate = new URL(source).hostname === new URL(finalUrl).hostname && chain.length <= 3;
+  return deliberate ? { classification: 'deliberate', interpretation: 'Clean same-site redirect with no recognized authentication or CMS-generated pattern; likely an intentional URL migration. Update internal links to the final URL.' } : { classification: 'unknown', interpretation: 'No reliable implementation signature was detected. Validate the redirect in the CMS or server configuration before changing it.' };
+}
 
 export function validateConfig(config: AuditConfig): void {
   const url = new URL(config.startUrl);
@@ -184,12 +191,14 @@ async function loadRobots(origin: string, userAgent: string) {
 async function fetchWithRedirects(url: string, userAgent: string, accept = 'text/html,application/xhtml+xml', maximum = 10) {
   const startedAt = Date.now();
   const chain = [url];
+  const redirectStatuses: number[] = [];
   let current = url;
   for (let hop = 0; hop <= maximum; hop++) {
     const response = await fetch(current, { redirect: 'manual', headers: { 'user-agent': userAgent, accept }, signal: AbortSignal.timeout(30000) });
-    if (response.status < 300 || response.status >= 400) return { response, finalUrl: current, redirectChain: chain.length > 1 ? chain : [], responseTimeMs: Date.now() - startedAt };
+    if (response.status < 300 || response.status >= 400) return { response, finalUrl: current, redirectChain: chain.length > 1 ? chain : [], redirectStatuses, responseTimeMs: Date.now() - startedAt };
     const location = response.headers.get('location');
-    if (!location) return { response, finalUrl: current, redirectChain: chain.length > 1 ? chain : [], responseTimeMs: Date.now() - startedAt };
+    if (!location) return { response, finalUrl: current, redirectChain: chain.length > 1 ? chain : [], redirectStatuses, responseTimeMs: Date.now() - startedAt };
+    redirectStatuses.push(response.status);
     let next: string;
     try {
       const target = new URL(location, current);
@@ -311,13 +320,12 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     if (robots.isAllowed(url, input.userAgent) === false) { excluded.push({ url, reason: 'Disallowed by robots.txt' }); return; }
     if (input.delayMs) await sleep(input.delayMs);
     try {
-      const { response, finalUrl, redirectChain, responseTimeMs } = await fetchWithRedirects(url, input.userAgent);
+      const { response, finalUrl, redirectChain, redirectStatuses, responseTimeMs } = await fetchWithRedirects(url, input.userAgent);
       const gatedAuthentication = isGatedAuthenticationFlow(url, finalUrl, redirectChain);
-      if (redirectChain.length && !isTrailingSlashOnlyRedirect(url, finalUrl)) redirects.push({ source: url, sourcePages: [], chain: redirectChain, finalUrl, finalStatus: response.status, classification: gatedAuthentication ? 'gated_authentication_flow' : 'redirect' });
+      if (redirectChain.length && !gatedAuthentication && !isTrailingSlashOnlyRedirect(url, finalUrl)) redirects.push({ source: url, sourcePages: [], chain: redirectChain, finalUrl, finalStatus: response.status, sourceStatus: redirectStatuses[0], ...classifySeoRedirect(url, finalUrl, redirectChain) });
+      if (gatedAuthentication) return;
       if (!sameHost(finalUrl, startUrl)) {
-        excluded.push(gatedAuthentication
-          ? { url, reason: `Intentional gated/authentication flow; the destination provider response is not treated as a broken link. Final destination: ${finalUrl}` }
-          : { url, reason: `Redirected outside the audited domain: ${finalUrl}`, status: response.status });
+        excluded.push({ url, reason: `Redirected outside the audited domain: ${finalUrl}`, status: response.status });
         return;
       }
       const contentType = response.headers.get('content-type') ?? '';
@@ -407,10 +415,10 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       if (speed.errorCode === 'rate_limited') pageSpeedRateLimited = true;
     }
   }
-  const pageByUrl = new Map(pages.map(page => [page.url, page]));
+  const pageByUrl = new Map(pages.map(page => [graphKey(page.url), page]));
   for (const source of pages) {
     for (const destination of new Set(source.links.filter(link => link.internal).map(link => link.url))) {
-      const target = pageByUrl.get(destination);
+      const target = pageByUrl.get(graphKey(destination));
       if (target) target.incomingInternalLinks += 1;
     }
   }
