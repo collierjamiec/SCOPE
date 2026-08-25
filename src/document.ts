@@ -257,9 +257,9 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   children.push(heading('Redirect chains', 1));
   if (!report.redirects.length) children.push(body('No redirect chains were encountered during the crawl.'));
   else children.push(dataTable(
-    ['Requested URL', 'Linked from', 'Redirect chain', 'Final status'],
-    report.redirects.map(redirect => [redirect.source, redirect.sourcePages.join(' | ') || 'Seed or sitemap', redirect.chain.join(' → '), redirect.finalStatus]),
-    [2300, 2300, 3560, 1200]
+    ['Type', 'Requested URL', 'Linked from', 'Redirect chain', 'Final status'],
+    report.redirects.map(redirect => [redirect.classification === 'gated_authentication_flow' ? 'Gated/auth' : 'Redirect', redirect.source, redirect.sourcePages.join(' | ') || 'Seed or sitemap', redirect.chain.join(' → '), redirect.finalStatus]),
+    [1100, 2000, 2000, 3160, 1000]
   ));
   children.push(heading('Broken internal links', 1));
   if (report.config.reportBrokenLinks === false) children.push(body('Broken-link reporting was not selected for this audit.'));

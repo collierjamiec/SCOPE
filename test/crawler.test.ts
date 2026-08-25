@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { crawlSite, isArchiveUrl, isExcludedUrl, needsJavaScriptRendering, safeCrawlUrl, validateConfig } from '../src/crawler.js';
+import { crawlSite, isArchiveUrl, isExcludedUrl, isGatedAuthenticationFlow, isTrailingSlashOnlyRedirect, needsJavaScriptRendering, safeCrawlUrl, validateConfig } from '../src/crawler.js';
 
 test('accepts an unlimited crawl configuration', () => {
   assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
@@ -46,6 +46,21 @@ test('identifies common low-value archive URL patterns', () => {
   assert.equal(isArchiveUrl('https://example.test/resource/seo-guide'), false);
 });
 
+test('classifies Patreon unlock redirects as gated authentication rather than broken links', () => {
+  const source = 'https://queerandunbroken.com/patreon-flow?patreon-unlock-post=1773';
+  const oauth = 'https://www.patreon.com/oauth2/authorize?client_id=test';
+  const login = 'https://www.patreon.com/login?ru=%2Foauth2%2Fauthorize';
+  assert.equal(isGatedAuthenticationFlow(source, login, [source, oauth, login]), true);
+  assert.equal(isGatedAuthenticationFlow('https://example.test/old', 'https://other.test/missing', []), false);
+});
+
+test('recognizes pure trailing-slash normalization redirects', () => {
+  assert.equal(isTrailingSlashOnlyRedirect('https://example.test/article', 'https://example.test/article/'), true);
+  assert.equal(isTrailingSlashOnlyRedirect('https://example.test/article?a=1', 'https://example.test/article/?a=1'), true);
+  assert.equal(isTrailingSlashOnlyRedirect('https://example.test/old', 'https://example.test/new/'), false);
+  assert.equal(isTrailingSlashOnlyRedirect('http://example.test/article', 'https://example.test/article/'), false);
+});
+
 test('crawl respects robots and excludes noindex pages from analysis', async (context) => {
   const requested: string[] = [];
   const server = createServer((request, response) => {
@@ -79,7 +94,7 @@ test('crawl respects robots and excludes noindex pages from analysis', async (co
   assert.ok(report.keywords.every(keyword => keyword.pages.every(page => !page.url.endsWith('/hidden'))));
   assert.equal(report.sitemaps[0].type, 'urlset');
   assert.equal(report.summary.sitemapPageUrls, 3);
-  assert.equal(report.redirects.length, 2);
+  assert.equal(report.redirects.length, 1);
   assert.ok(report.redirects.some(redirect => redirect.chain.some(url => new URL(url).pathname === '/allowed/')));
   assert.equal(report.pages.find(page => page.url.endsWith('/'))?.internalLinkCount, 5);
   assert.ok(report.excludedPages.some(page => page.url.includes('/blog/article') && page.reason.includes('configuration')));

@@ -74,6 +74,31 @@ export function needsJavaScriptRendering(html: string): boolean {
   return bodyText.length < 400 || !meaningfulStructure || !discoverableLinks || !metadata;
 }
 
+export function isGatedAuthenticationFlow(source: string, finalUrl: string, chain: string[] = []): boolean {
+  const sourceUrl = new URL(source);
+  const destination = new URL(finalUrl);
+  const patreonUnlock = /(^|\/)patreon-flow\/?$/i.test(sourceUrl.pathname)
+    || [...sourceUrl.searchParams.keys()].some(key => /^patreon-(?:unlock|login|final)/i.test(key));
+  const patreonAuthentication = [destination, ...chain.map(url => new URL(url))]
+    .some(url => /(^|\.)patreon\.com$/i.test(url.hostname) && /\/(?:login|oauth2)(?:\/|$)/i.test(url.pathname));
+  if (patreonUnlock && patreonAuthentication) return true;
+
+  const sourceSignalsAuthentication = /\/(?:login|sign-?in|oauth|authorize|checkout|subscribe|membership|members|unlock)(?:\/|$)/i.test(sourceUrl.pathname)
+    || [...sourceUrl.searchParams.keys()].some(key => /(?:login|auth|oauth|unlock|return|redirect)/i.test(key));
+  const destinationIsAuthentication = /\/(?:login|sign-?in|oauth2?|authorize|checkout|subscribe|membership)(?:\/|$)/i.test(destination.pathname);
+  return sourceUrl.hostname !== destination.hostname && sourceSignalsAuthentication && destinationIsAuthentication;
+}
+
+export function isTrailingSlashOnlyRedirect(source: string, finalUrl: string): boolean {
+  const from = new URL(source);
+  const to = new URL(finalUrl);
+  const trimSlash = (path: string) => path.length > 1 ? path.replace(/\/+$/, '') : path;
+  return from.origin === to.origin
+    && from.search === to.search
+    && trimSlash(from.pathname) === trimSlash(to.pathname)
+    && from.pathname !== to.pathname;
+}
+
 export function validateConfig(config: AuditConfig): void {
   const url = new URL(config.startUrl);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Start URL must use HTTP or HTTPS.');
@@ -237,8 +262,14 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     if (input.delayMs) await sleep(input.delayMs);
     try {
       const { response, finalUrl, redirectChain, responseTimeMs } = await fetchWithRedirects(url, input.userAgent);
-      if (redirectChain.length) redirects.push({ source: url, sourcePages: [], chain: redirectChain, finalUrl, finalStatus: response.status });
-      if (!sameHost(finalUrl, startUrl)) { excluded.push({ url, reason: `Redirected outside the audited domain: ${finalUrl}`, status: response.status }); return; }
+      const gatedAuthentication = isGatedAuthenticationFlow(url, finalUrl, redirectChain);
+      if (redirectChain.length && !isTrailingSlashOnlyRedirect(url, finalUrl)) redirects.push({ source: url, sourcePages: [], chain: redirectChain, finalUrl, finalStatus: response.status, classification: gatedAuthentication ? 'gated_authentication_flow' : 'redirect' });
+      if (!sameHost(finalUrl, startUrl)) {
+        excluded.push(gatedAuthentication
+          ? { url, reason: `Intentional gated/authentication flow; the destination provider response is not treated as a broken link. Final destination: ${finalUrl}` }
+          : { url, reason: `Redirected outside the audited domain: ${finalUrl}`, status: response.status });
+        return;
+      }
       const contentType = response.headers.get('content-type') ?? '';
       if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) { excluded.push({ url: finalUrl, reason: 'Non-HTML content', status: response.status }); return; }
       const rawHtml = await response.text();
@@ -337,7 +368,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   if (input.serp && rankingCandidates.length) applyRankings(rankingCandidates, await getRankings(new HttpSerpProvider(input.serp), rankingCandidates, new URL(startUrl).hostname));
   const cannibalization = detectCannibalization(keywords);
   for (const redirect of redirects) redirect.sourcePages = pages.filter(page => page.links.some(link => link.url === redirect.source)).map(page => page.url);
-  const failures = new Map(excluded.filter(item => item.status && item.status >= 400).map(item => [item.url, item]));
+  const failures = new Map(excluded.filter(item => item.status && item.status >= 400 && !item.reason.startsWith('Intentional gated/authentication flow')).map(item => [item.url, item]));
   const brokenLinks = input.reportBrokenLinks === false ? [] : pages.flatMap(page => page.links.filter(link => link.internal && failures.has(link.url)).map(link => {
     const failed = failures.get(link.url)!;
     return { sourcePage: page.url, anchorText: link.text || '[No anchor text]', destination: link.url, status: failed.status ?? null, error: failed.reason };

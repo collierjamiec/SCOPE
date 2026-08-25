@@ -256,6 +256,7 @@ export interface RedirectResult {
   chain: string[];
   finalUrl: string;
   finalStatus: number;
+  classification?: 'redirect' | 'gated_authentication_flow';
 }
 
 export interface BrokenLinkResult {

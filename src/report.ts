@@ -28,7 +28,7 @@ export function technicalCsv(report: AuditReport): string {
   const header = ['Type','Source Page','Anchor Text','Destination','HTTP Status','Redirect Chain','Details'];
   const rows = [
     ...report.brokenLinks.map(link => ['broken_link', link.sourcePage, link.anchorText, link.destination, link.status ?? '', '', link.error]),
-    ...report.redirects.map(redirect => ['redirect', redirect.source, '', redirect.finalUrl, redirect.finalStatus, redirect.chain.join(' → '), `Linked from: ${redirect.sourcePages.join(' | ') || 'Seed or sitemap'}`]),
+    ...report.redirects.map(redirect => [redirect.classification === 'gated_authentication_flow' ? 'gated_authentication_flow' : 'redirect', redirect.source, '', redirect.finalUrl, redirect.finalStatus, redirect.chain.join(' → '), `${redirect.classification === 'gated_authentication_flow' ? 'Intentional access flow; provider status is informational only. ' : ''}Linked from: ${redirect.sourcePages.join(' | ') || 'Seed or sitemap'}`]),
     ...(report.externalPages ?? []).map(page => [`external_depth_${page.depth}`, page.sourcePages.join(' | '), '', page.url, page.status ?? '', page.redirectChain.join(' → '), page.error ?? `Final URL: ${page.finalUrl}; ${page.responseTimeMs ?? 'n/a'} ms`]),
     ...report.excludedPages.map(item => ['excluded', '', '', item.url, item.status ?? '', '', item.reason])
   ];
