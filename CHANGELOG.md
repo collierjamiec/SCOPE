@@ -18,6 +18,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 - Store local OAuth credentials under the writable, Git-ignored installation `.scope/` directory by default; packaged installs can override the data path.
 - Added an impression-weighted average GSC keyword-position KPI to the dashboard and generated report.
 - Added PageSpeed request pacing, `Retry-After` handling, bounded retries for HTTP 429/5xx responses, and audit-wide quota-exhaustion classification.
+- Added explicit GSC/GA4 reporting-period provenance throughout the dashboard and documents, GA4 date overrides and engagement-rate reporting, PageSpeed metric tooltips, and deterministic PDF/DOCX sorting for keywords and analytics.
 
 ## 2.0.0 — 2026-08-25
 

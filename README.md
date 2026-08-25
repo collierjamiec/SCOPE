@@ -116,6 +116,8 @@ A normal Search Console export does **not** contain a combined Query + Page tabl
 
 If no `Filters.csv` is supplied, SCOPE explicitly reports that the reporting period is unavailable rather than implying positions are current. A custom date-dimension CSV can provide exact minimum and maximum dates as a fallback, but it is not part of every standard export.
 
+GA4 reporting periods are read from native `Start date` / `End date` export metadata or a `Date` dimension when present. If the CSV omits both, enter the exact period beside the GA4 uploader. The dashboard, DOCX, and PDF explicitly disclose the date range and its source—or state that it is unavailable. GA4 landing-page reporting includes sessions, active users, engaged sessions, engagement rate, and key events, sorted by sessions descending in generated documents.
+
 ## Google Analytics 4 imports
 
 Export a GA4 report with a primary dimension of **Landing page** or **Landing page + query string**. Recommended columns are Sessions, Active users, Engaged sessions, Engagement rate, and Key events. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows.
@@ -177,6 +179,8 @@ SCOPE does not send reports by email. Users download the PDF and share it throug
 PageSpeed is disabled by default because it runs a separate Google PageSpeed Insights request for every analyzed page, which adds time and may be quota-limited. Open **Settings → Performance & PageSpeed** to enable it, or pass `--pagespeed` on the CLI. For larger audits, save a Google PageSpeed API key locally in that settings panel or set `PAGESPEED_API_KEY`. The locally saved key is stored at `.scope/pagespeed.json` with owner-only permissions and is excluded from Git and reports.
 
 When enabled, the dashboard adds a dedicated **PageSpeed** report with sortable, searchable per-page results: mobile Lighthouse performance, accessibility, best-practices and SEO scores; lab LCP, CLS, TBT, FCP and Speed Index; request errors; and field LCP, CLS and INP from Chrome UX Report data when Google has enough real-user observations. Lab and field data are identified separately.
+
+Every PageSpeed column has a hover tooltip defining its acronym and explaining whether it is a lab Lighthouse diagnostic or real-user field measurement.
 
 PageSpeed requests are paced and transient HTTP 429/5xx responses are retried with exponential backoff or Google’s `Retry-After` instruction. If Google’s quota remains exhausted, SCOPE classifies the condition as a quota/rate-limit event and skips the remaining PageSpeed calls instead of repeatedly failing every page. Configure `PAGESPEED_API_KEY` with available quota for large, exhaustive audits.
 

@@ -92,6 +92,23 @@ export function detectGscDateRange(csvFiles: Array<string | undefined>): { start
   return { start, end, label: `${start} through ${end}`, source: 'Date dimension export' };
 }
 
+const compactDate = (value: string): string | undefined => {
+  const match = value.trim().match(/^(\d{4})[-/]?(\d{2})[-/]?(\d{2})$/); return match ? `${match[1]}-${match[2]}-${match[3]}` : undefined;
+};
+
+export function detectGa4DateRange(csv: string | undefined): { start?: string; end?: string; label: string; source: 'GA4 export metadata' | 'GA4 date dimension' } | undefined {
+  if (!csv?.trim()) return undefined;
+  const startRaw = csv.match(/^\s*#?\s*Start date\s*:\s*([^\r\n]+)/im)?.[1] ?? '';
+  const endRaw = csv.match(/^\s*#?\s*End date\s*:\s*([^\r\n]+)/im)?.[1] ?? '';
+  const start = compactDate(startRaw), end = compactDate(endRaw);
+  if (start && end) return { start, end, label: `${start} through ${end}`, source: 'GA4 export metadata' };
+  const label = csv.match(/^\s*#?\s*Date range\s*:\s*([^\r\n]+)/im)?.[1]?.trim();
+  if (label) return { label, source: 'GA4 export metadata' };
+  const dates = parseCsv(csv).map(row => compactDate(field(row, ['date']))).filter((value): value is string => Boolean(value)).sort();
+  if (!dates.length) return undefined;
+  return { start: dates[0], end: dates[dates.length - 1], label: `${dates[0]} through ${dates[dates.length - 1]}`, source: 'GA4 date dimension' };
+}
+
 export function applyGa4Export(pages: PageResult[], csv: string | undefined, origin: string): number {
   if (!csv?.trim()) return 0;
   const rows = parseCsv(csv); const pageMap = new Map(pages.map(page => [new URL(page.url).pathname.replace(/\/$/, '') || '/', page]));

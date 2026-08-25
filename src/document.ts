@@ -196,6 +196,12 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   const orphanCandidates = report.pages.filter(page => page.url !== report.config.startUrl && (page.incomingInternalLinks ?? 0) === 0).length;
   const aioPages = report.pages.filter(page => page.aio);
   const averageAio = average(aioPages.map(page => page.aio.score));
+  const keywordPosition = (keyword: AuditReport['keywords'][number]) => keyword.searchConsole?.position ?? keyword.ranking?.position ?? null;
+  const documentKeywords = [...report.keywords].sort((a, b) => Number(Boolean(b.searchConsole)) - Number(Boolean(a.searchConsole))
+    || (keywordPosition(a) ?? Number.POSITIVE_INFINITY) - (keywordPosition(b) ?? Number.POSITIVE_INFINITY)
+    || a.keyword.localeCompare(b.keyword));
+  const ga4Pages = report.pages.filter(page => page.analytics).sort((a, b) => b.analytics!.sessions - a.analytics!.sessions || a.url.localeCompare(b.url));
+  const periodText = (range: AuditReport['importedData']['gscDateRange'] | AuditReport['importedData']['ga4DateRange'] | undefined, unavailable: string) => range ? `${range.start && range.end ? `${range.start} through ${range.end}` : range.label} (${range.source})` : unavailable;
   const children: Array<Paragraph | Table> = [
     new Paragraph({ spacing: { before: 320, after: 80 }, children: [new TextRun({ text: 'SCOPE WEBSITE AUDIT', bold: true, size: 46, color: NAVY, font: 'Arial' })] }),
     new Paragraph({ spacing: { after: 260 }, children: [new TextRun({ text: report.domain, size: 28, color: MUTED, font: 'Arial' })] }),
@@ -211,13 +217,13 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
       [1900, 1800, 1700, 1700, 2260]
     ),
     body(`${report.partial ? 'PARTIAL REPORT: The crawl was cancelled by the user; findings cover only pages completed before cancellation. ' : ''}This report separates observed crawl evidence from inferred keyword relevance. When no SERP provider is configured, keyword positions remain unavailable and cannibalization flags indicate overlapping on-page targeting rather than proven ranking overlap.`),
-    body(`Imported data: ${report.importedData.gscRows} GSC row(s) and ${report.importedData.ga4Rows} GA4 row(s).${report.importedData.gscAveragePosition !== undefined ? ` Impression-weighted average GSC position: ${report.importedData.gscAveragePosition.toFixed(1)}.` : ''}${report.importedData.gscProperty ? ` Search Console property: ${report.importedData.gscProperty}.` : ''}${report.importedData.gscDateRange ? ` GSC reporting period: ${report.importedData.gscDateRange.start ?? report.importedData.gscDateRange.label} through ${report.importedData.gscDateRange.end ?? report.importedData.gscDateRange.label} (${report.importedData.gscDateRange.source}).` : ''} Uploaded exports are processed locally; Google credentials and tokens are never retained in report configuration or output files.`),
+    body(`Imported data: ${report.importedData.gscRows} GSC row(s) and ${report.importedData.ga4Rows} GA4 row(s).${report.importedData.gscAveragePosition !== undefined ? ` Impression-weighted average GSC position: ${report.importedData.gscAveragePosition.toFixed(1)}.` : ''}${report.importedData.gscProperty ? ` Search Console property: ${report.importedData.gscProperty}.` : ''} GSC reporting period: ${periodText(report.importedData.gscDateRange, 'unavailable')}. GA4 reporting period: ${periodText(report.importedData.ga4DateRange, 'unavailable')}. Uploaded exports are processed locally; Google credentials and tokens are never retained in report configuration or output files.`),
     heading('Prioritized action roadmap', 1),
     body('Priority combines issue severity and the number of affected pages. Effort is an implementation estimate and should be validated against the site platform.'),
     dataTable(
       ['Rank', 'Impact', 'Effort', 'Area', 'Affected', 'Recommended action'],
       report.priorities.map(item => [item.rank, item.impact, item.effort, item.area, item.affectedPages, item.recommendation]),
-      [650, 900, 900, 1050, 800, 5260]
+      [850, 1000, 1000, 900, 1050, 4560]
     ),
     heading('AIO Answer Readiness', 1),
     body(`Average readiness score: ${averageAio}/100 across ${aioPages.length} analyzed pages. This measures technical and content readiness—not verified inclusion, ranking, or citation in an AI answer.`),
@@ -283,12 +289,21 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   children.push(heading('Keyword targeting and rankings', 1, true));
   children.push(body('Target score: a weighted measure of how strongly an exact phrase is reinforced on the primary page. Title matches add 8 points; H1 7; H2 4; meta description 3; visible body occurrences 0.12 each. It is not search volume, traffic, or a Google ranking score.'));
   children.push(body('Confidence: a bounded heuristic derived from the strongest page score (30% + score ÷ 25, capped at 98%). It expresses strength and consistency of the observed on-page evidence—not a statistical probability and not proof that the page ranks.'));
-  children.push(body('Organic rank: populated only by a configured licensed SERP provider; otherwise it remains unavailable.'));
+  children.push(body('Position: observed GSC average position takes precedence, followed by a licensed SERP result when available. Rows are ordered with GSC-observed queries first and positions from lowest (best) to highest; unavailable inferred targets follow alphabetically.'));
   if (!report.keywords.length) children.push(body('No sufficiently strong domain keyword candidates were identified.'));
   else children.push(dataTable(
-    ['Keyword', 'Target score', 'Confidence', 'Primary page', 'Organic rank'],
-    report.keywords.map(keyword => [keyword.keyword, Number((keyword.pages[0]?.score ?? 0).toFixed(2)), `${Math.round(keyword.confidence * 100)}%`, keyword.pages[0]?.url ?? '', keyword.ranking?.position ?? 'Unavailable']),
-    [1950, 1200, 1350, 3460, 1400]
+    ['Keyword', 'Evidence', 'Position', 'Target score', 'Primary page'],
+    documentKeywords.map(keyword => [keyword.keyword, keyword.searchConsole ? 'GSC observed' : 'Content inferred', keywordPosition(keyword)?.toFixed(1) ?? 'Unavailable', keyword.searchConsole ? 'n/a' : Number((keyword.pages[0]?.score ?? 0).toFixed(2)), keyword.searchConsole?.pages[0] ?? keyword.pages[0]?.url ?? '']),
+    [1900, 1400, 1050, 1200, 3810]
+  ));
+
+  children.push(heading('GA4 landing-page performance', 1));
+  children.push(body(`Reporting period: ${periodText(report.importedData.ga4DateRange, 'unavailable - set the GA4 dates in Connected data')}. Rows are sorted by sessions from greatest to least. Engagement rate is the GA4-exported engaged-session rate, shown as a percentage.`));
+  if (!ga4Pages.length) children.push(body('No GA4 landing-page rows matched analyzed pages.'));
+  else children.push(dataTable(
+    ['Landing page', 'Sessions', 'Active users', 'Engaged sessions', 'Engagement rate', 'Key events'],
+    ga4Pages.map(page => [page.url, page.analytics!.sessions, page.analytics!.activeUsers, page.analytics!.engagedSessions, `${(page.analytics!.engagementRate * 100).toFixed(1)}%`, page.analytics!.keyEvents]),
+    [3500, 1050, 1100, 1250, 1250, 1210]
   ));
 
   children.push(heading('Keyword cannibalization', 1));

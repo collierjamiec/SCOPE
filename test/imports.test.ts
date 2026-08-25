@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyGa4Export, averageGscPosition, detectGscDateRange, mergeGscExport } from '../src/imports.js';
+import { applyGa4Export, averageGscPosition, detectGa4DateRange, detectGscDateRange, mergeGscExport } from '../src/imports.js';
 import type { PageResult } from '../src/types.js';
 
 test('merges Search Console exports into keyword candidates', () => {
@@ -51,4 +51,14 @@ test('finds native GA4 headers after report metadata rows', () => {
   const csv = '# GA4 Landing page report\n# Date range: last 28 days\nLanding page + query string,Sessions,Active users,Engaged sessions,Engagement rate,Key events\n/a?utm_source=test,40,30,25,62.5%,3\n';
   assert.equal(applyGa4Export(pages, csv, 'https://example.com'), 1);
   assert.equal(pages[0].analytics?.sessions, 40);
+  assert.equal(pages[0].analytics?.engagementRate, 0.625);
+});
+
+test('discloses GA4 dates from native export metadata or a date dimension', () => {
+  assert.deepEqual(detectGa4DateRange('# Start date: 20260501\n# End date: 20260531\nLanding page,Sessions\n/,1\n'), {
+    start: '2026-05-01', end: '2026-05-31', label: '2026-05-01 through 2026-05-31', source: 'GA4 export metadata'
+  });
+  assert.deepEqual(detectGa4DateRange('Date,Landing page,Sessions\n20260531,/,1\n20260501,/a,2\n'), {
+    start: '2026-05-01', end: '2026-05-31', label: '2026-05-01 through 2026-05-31', source: 'GA4 date dimension'
+  });
 });
