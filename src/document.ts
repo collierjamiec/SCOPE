@@ -245,9 +245,16 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   children.push(heading('Redirect chains', 1));
   if (!report.redirects.length) children.push(body('No redirect chains were encountered during the crawl.'));
   else children.push(dataTable(
-    ['Source', 'Redirect chain', 'Final status'],
-    report.redirects.map(redirect => [redirect.source, redirect.chain.join(' → '), redirect.finalStatus]),
-    [3000, 5160, 1200]
+    ['Requested URL', 'Linked from', 'Redirect chain', 'Final status'],
+    report.redirects.map(redirect => [redirect.source, redirect.sourcePages.join(' | ') || 'Seed or sitemap', redirect.chain.join(' → '), redirect.finalStatus]),
+    [2300, 2300, 3560, 1200]
+  ));
+  children.push(heading('Broken internal links', 1));
+  if (!report.brokenLinks?.length) children.push(body('No crawled internal links returned HTTP 4xx/5xx responses. External links are inventoried but are not requested by this same-host crawler.'));
+  else children.push(dataTable(
+    ['Source page', 'Anchor text', 'Broken destination', 'HTTP'],
+    report.brokenLinks.map(link => [link.sourcePage, link.anchorText, link.destination, link.status ?? 'n/a']),
+    [2800, 1800, 3560, 1200]
   ));
   children.push(
     heading('Priority findings', 1)

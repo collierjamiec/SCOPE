@@ -16,6 +16,8 @@ SCOPE means **Search & Content Optimization Performance Engine**. It distinguish
 - Records meta-description text and Unicode character count.
 - Inventories robots-declared and conventional sitemaps, including sitemap type, status, entries, child sitemap count, and unique same-domain page URLs.
 - Records redirect chains and final status without double-counting an already analyzed destination.
+- Attributes internal 4xx/5xx destinations back to every source page and anchor text, and reports redirect sources, full chains, and final status in the dashboard, document, JSON, and `technical.csv`.
+- Accepts manual path-prefix exclusions. `/blog` excludes both `/blog` and descendants such as `/blog/article-name`; patterns are site-specific and are never assumed automatically.
 - Reports each page's HTTP status plus unique internal and external link counts.
 - Flags missing alt text and generic/unoptimized image filenames, then recommends an SEO-friendly filename and concise alt text using the page's subject and keyword targets.
 - Scores AI answer readiness across crawler/snippet accessibility (20), answer extractability (20), evidence and citation readiness (20), entity clarity (15), intent coverage (15), freshness (5), and multimodal accessibility (5).
@@ -49,6 +51,12 @@ Useful options:
 npm run dev -- --url https://example.com --max-pages 500 --max-keywords 100 --pagespeed --out audit-output
 ```
 
+Exclude one or more sections with comma-separated path prefixes:
+
+```bash
+npm run dev -- --url https://example.com --exclude /blog,/careers
+```
+
 The output root contains one folder per domain. Each domain folder contains:
 
 - `SCOPE-Audit-MM-DD-YYYY.docx` — a formatted document containing all findings
@@ -57,6 +65,7 @@ The output root contains one folder per domain. Each domain folder contains:
 - `keywords.csv` — keyword targeting, rankings, and competing pages
 - `links.csv` — every discovered internal and external link with source page, anchor text, and destination
 - `images.csv` — every flagged image with its issue, recommendation basis, suggested filename, and suggested alt text
+- `technical.csv` — broken internal links with source page and anchor text, redirect chains, final status, and excluded URLs
 
 For example: `audit-output/example.com/SCOPE-Audit-08-24-2026.docx`.
 

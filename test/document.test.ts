@@ -7,7 +7,7 @@ const report: AuditReport = {
   domain: 'example.com',
   config: { startUrl: 'https://example.com', maxPages: 50, maxKeywords: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false, serpConfigured: false, imageAnalysisConfigured: false },
   summary: { pagesFetched: 1, indexablePagesAnalyzed: 1, excludedNonIndexable: 0, keywordsIdentified: 0, rankingsChecked: 0, sitemapPageUrls: 0 },
-  sitemaps: [], redirects: [], pages: [], excludedPages: [], keywords: [], cannibalization: [], aiCrawlerAccess: [], generatedAt: '2026-08-24T12:00:00.000Z'
+  sitemaps: [], redirects: [], brokenLinks: [], pages: [], excludedPages: [], keywords: [], cannibalization: [], aiCrawlerAccess: [], generatedAt: '2026-08-24T12:00:00.000Z'
 };
 
 test('uses the requested dated audit filename', () => {

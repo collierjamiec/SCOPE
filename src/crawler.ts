@@ -27,6 +27,19 @@ export interface CrawlProgress {
 
 export type ProgressReporter = (progress: CrawlProgress) => void | Promise<void>;
 
+export function isExcludedUrl(url: string, patterns: string[] = []): boolean {
+  const candidate = new URL(url);
+  return patterns.some(raw => {
+    const value = raw.trim();
+    if (!value) return false;
+    let path = value;
+    try { path = new URL(value, candidate.origin).pathname; } catch { /* Treat as a path. */ }
+    path = path.replace(/\*+$/, '').replace(/\/$/, '') || '/';
+    const candidatePath = candidate.pathname.replace(/\/$/, '') || '/';
+    return candidatePath === path || candidatePath.startsWith(`${path}/`);
+  });
+}
+
 export function validateConfig(config: AuditConfig): void {
   const url = new URL(config.startUrl);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Start URL must use HTTP or HTTPS.');
@@ -115,11 +128,13 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const analyzedUrls = new Set<string>();
   const redirects: AuditReport['redirects'] = [];
   const excluded: AuditReport['excludedPages'] = [];
+  const configuredExclusions = input.excludePaths ?? [];
   await onProgress({ phase: 'sitemaps', message: `Discovered ${sitemapInfo.pageUrls.length} sitemap URLs`, fetched: 0, analyzed: 0, queued: queue.length, percent: input.maxPages ? 2 : null });
 
   while (queue.length && (input.maxPages === null || fetched.size < input.maxPages)) {
     const url = queue.shift()!;
     if (fetched.has(url)) continue;
+    if (isExcludedUrl(url, configuredExclusions)) { excluded.push({ url, reason: 'Excluded by audit configuration' }); continue; }
     fetched.add(url);
     await onProgress({
       phase: 'crawling', message: `Fetching ${url}`, fetched: fetched.size, analyzed: pages.length, queued: queue.length,
@@ -130,7 +145,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     if (input.delayMs) await sleep(input.delayMs);
     try {
       const { response, finalUrl, redirectChain, responseTimeMs } = await fetchWithRedirects(url, input.userAgent);
-      if (redirectChain.length) redirects.push({ source: url, chain: redirectChain, finalUrl, finalStatus: response.status });
+      if (redirectChain.length) redirects.push({ source: url, sourcePages: [], chain: redirectChain, finalUrl, finalStatus: response.status });
       if (!sameHost(finalUrl, startUrl)) { excluded.push({ url, reason: `Redirected outside the audited domain: ${finalUrl}`, status: response.status }); continue; }
       const contentType = response.headers.get('content-type') ?? '';
       if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) { excluded.push({ url: finalUrl, reason: 'Non-HTML content', status: response.status }); continue; }
@@ -165,6 +180,12 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const keywords = aggregateKeywords(pages, input.maxKeywords);
   if (input.serp) applyRankings(keywords, await getRankings(new HttpSerpProvider(input.serp), keywords, new URL(startUrl).hostname));
   const cannibalization = detectCannibalization(keywords);
+  for (const redirect of redirects) redirect.sourcePages = pages.filter(page => page.links.some(link => link.url === redirect.source)).map(page => page.url);
+  const failures = new Map(excluded.filter(item => item.status && item.status >= 400).map(item => [item.url, item]));
+  const brokenLinks = pages.flatMap(page => page.links.filter(link => link.internal && failures.has(link.url)).map(link => {
+    const failed = failures.get(link.url)!;
+    return { sourcePage: page.url, anchorText: link.text || '[No anchor text]', destination: link.url, status: failed.status ?? null, error: failed.reason };
+  }));
   const aiCrawlerAccess = ['OAI-SearchBot', 'Googlebot', 'Bingbot'].map(crawler => {
     const allowed = robots.isAllowed(startUrl, crawler) !== false;
     return { crawler, allowed, note: allowed ? 'Allowed to fetch the starting page by robots.txt.' : 'Blocked from the starting page by robots.txt.' };
@@ -174,11 +195,11 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     config: {
       startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
-      pageSpeed: input.pageSpeed, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
+      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
     sitemaps: sitemapInfo.results,
-    redirects,
+    redirects, brokenLinks,
     pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, generatedAt: new Date().toISOString()
   };
   await onProgress({ phase: 'complete', message: 'Audit complete', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 100 });

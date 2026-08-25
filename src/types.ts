@@ -10,6 +10,8 @@ export interface AuditConfig {
   pageSpeedApiKey?: string;
   serp?: SerpConfig;
   imageAnalysis?: ImageAnalysisConfig;
+  /** URL path prefixes to omit, for example /blog excludes /blog and /blog/*. */
+  excludePaths?: string[];
 }
 
 export interface ImageAnalysisConfig {
@@ -178,6 +180,7 @@ export interface AuditReport {
   };
   sitemaps: SitemapResult[];
   redirects: RedirectResult[];
+  brokenLinks: BrokenLinkResult[];
   pages: PageResult[];
   excludedPages: Array<{ url: string; reason: string; status?: number }>;
   keywords: KeywordCandidate[];
@@ -188,9 +191,18 @@ export interface AuditReport {
 
 export interface RedirectResult {
   source: string;
+  sourcePages: string[];
   chain: string[];
   finalUrl: string;
   finalStatus: number;
+}
+
+export interface BrokenLinkResult {
+  sourcePage: string;
+  anchorText: string;
+  destination: string;
+  status: number | null;
+  error: string;
 }
 
 export interface SitemapResult {

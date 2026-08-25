@@ -24,6 +24,16 @@ export function linksCsv(report: AuditReport): string {
   return [header, ...rows].map(row => row.map(csv).join(',')).join('\n') + '\n';
 }
 
+export function technicalCsv(report: AuditReport): string {
+  const header = ['Type','Source Page','Anchor Text','Destination','HTTP Status','Redirect Chain','Details'];
+  const rows = [
+    ...report.brokenLinks.map(link => ['broken_link', link.sourcePage, link.anchorText, link.destination, link.status ?? '', '', link.error]),
+    ...report.redirects.flatMap(redirect => (redirect.sourcePages.length ? redirect.sourcePages : ['']).map(sourcePage => ['redirect', sourcePage, '', redirect.source, redirect.finalStatus, redirect.chain.join(' → '), `Final URL: ${redirect.finalUrl}`])),
+    ...report.excludedPages.map(item => ['excluded', '', '', item.url, item.status ?? '', '', item.reason])
+  ];
+  return [header, ...rows].map(row => row.map(csv).join(',')).join('\n') + '\n';
+}
+
 export function keywordsCsv(report: AuditReport): string {
   const header = ['Keyword','Target Score','Confidence','Primary Page','Competing Pages','Organic Position','Ranking URL','Ranking Provider'];
   const rows = report.keywords.map(keyword => [
