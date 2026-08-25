@@ -1,103 +1,160 @@
-# Organic Site Auditor
+# SCOPE
+
+**Search & Content Optimization Performance Engine**
 
 Copyright © 2026 Jamie C. Collier. All rights reserved.
 
-A respectful, robots-aware website crawler for page metadata, keyword targeting, cannibalization signals, JSON-LD, CTA detection, PageSpeed, and SEO/GEO/AIO checks.
+SCOPE is a local, robots-aware website auditing application for SEO, GEO, and AIO answer readiness. It crawls an entire eligible website or a bounded sample, analyzes every indexable page, enriches findings with optional Google Search Console (GSC), Google Analytics 4 (GA4), PageSpeed, image-analysis, and licensed SERP data, then presents the results in a browser dashboard and downloadable reports.
 
-SCOPE means **Search & Content Optimization Performance Engine**. It distinguishes **AIO Answer Readiness**, which can be measured from crawl evidence, from **AI visibility**, which requires platform citation, referral, or licensed monitoring data.
+SCOPE distinguishes **AIO answer readiness**, which can be assessed from crawl evidence, from **AI visibility**, which requires citation, referral, or licensed monitoring data. It never presents inferred keyword targeting as a proven organic ranking.
 
-## Behavior and crawl scope
+## What SCOPE audits
 
-- Crawls every discoverable, allowed same-host HTML page by default. Use `--max-pages N` when you want a bounded sample.
-- Produces at most 100 domain-level keyword candidates.
-- Checks `robots.txt` before every page fetch.
-- Excludes non-HTML, non-2xx, and `noindex` pages from page analysis, keyword aggregation, PageSpeed, and cannibalization detection.
-- Crawls only the starting hostname and strips common tracking parameters.
-- Records meta-description text and Unicode character count.
-- Inventories robots-declared and conventional sitemaps, including sitemap type, status, entries, child sitemap count, and unique same-domain page URLs.
-- Records redirect chains and final status without double-counting an already analyzed destination.
-- Attributes internal 4xx/5xx destinations back to every source page and anchor text, and reports redirect sources, full chains, and final status in the dashboard, document, JSON, and `technical.csv`.
-- Accepts manual path-prefix exclusions. `/blog` excludes both `/blog` and descendants such as `/blog/article-name`; patterns are site-specific and are never assumed automatically.
-- Reports each page's HTTP status plus unique internal and external link counts.
-- Measures word, sentence, and paragraph counts, average sentence length, reading time, text-to-HTML ratio, Flesch Reading Ease, and Flesch-Kincaid grade level.
-- Flags missing alt text and generic/unoptimized image filenames, then recommends an SEO-friendly filename and concise alt text using the page's subject and keyword targets.
-- Scores AI answer readiness across crawler/snippet accessibility (20), answer extractability (20), evidence and citation readiness (20), entity clarity (15), intent coverage (15), freshness (5), and multimodal accessibility (5).
-- Checks robots access for OAI-SearchBot, Googlebot, and Bingbot; detects restrictive snippet controls; inventories question-led headings, answer passages, structured formats, authorship, dates, source links, and semantic/schema signals.
-- When `IMAGE_ANALYSIS_ENDPOINT` and `IMAGE_ANALYSIS_API_KEY` are configured, the image adapter can inspect image content and return stronger visual recommendations. Without it, recommendations are explicitly labeled as page-context inferences.
-- Rankings are `null` unless a licensed SERP provider is configured. The tool never treats inferred keywords as proven rankings.
-- Cannibalization is a warning based on overlapping on-page targeting. Without SERP or Search Console data it cannot prove that two pages rank for the same query.
+- SEO title, title length, meta description and character count, H1s, H2s, primary CTA and destination, canonical, language, viewport, HTTP status, and response time
+- Full internal and external link inventories with source page, anchor text, and destination
+- Broken internal links attributed to every source page
+- Meaningful redirect chains and final status, excluding pure trailing-slash normalization
+- Intentional gated and authentication flows, such as Patreon unlock links, classified separately instead of reported as broken
+- XML sitemap discovery, type, status, entries, child sitemaps, and unique same-domain page URLs
+- JSON-LD validity and detected schema types, separated from page-specific suggested schema
+- Word, sentence, and paragraph counts; sentence length; reading time; text-to-HTML ratio; Flesch Reading Ease; and Flesch-Kincaid grade level
+- Exhaustive image inventory, usage count, alt text, filename or CDN asset identifier, and optimization recommendations
+- Optional PageSpeed Insights and Core Web Vitals
+- SEO, GEO, and AIO opportunities with page-level findings and prioritized affected-page drilldowns
+- AIO answer readiness across accessibility, extractability, evidence, entity clarity, intent coverage, freshness, and multimodal accessibility
+- Keyword targeting, optional observed GSC queries, optional licensed SERP rankings, and cannibalization signals
 
-## Install and run
+## Crawl behavior and safeguards
+
+- Crawls every discoverable, allowed same-host HTML page by default; an optional page limit can bound the audit.
+- Checks `robots.txt` and excludes disallowed pages.
+- Excludes non-HTML and non-indexable pages from organic analysis, keyword aggregation, PageSpeed, and cannibalization detection.
+- Supports manual path-prefix exclusions. `/blog` excludes that path and all descendants without assuming every site has the same structure.
+- Supports sitemap-only crawling and optional exclusion of tag, category, author, feed, search, and pagination archives.
+- Normalizes common tracking parameters and applies configurable URL-depth and per-path ceilings.
+- Inventories external links without requesting them by default. Dashboard users may check external pages to depth 1, 2, or 3 with a separate limit.
+- Uses raw HTML by default and invokes Playwright only for pages that appear to require JavaScript rendering when that module is enabled.
+- Supports pause, resume, partial-report completion, and cancellation without a report.
+- Offers Fast, Standard, and Polite pacing. Throughput still depends on the target server, redirects, timeouts, JavaScript rendering, PageSpeed, and enabled modules.
+
+## Dashboard
 
 ```bash
 npm install
 PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers npx playwright install chromium
-npm run dev -- --url https://example.com
-```
-
-JavaScript rendering is optional in dashboard settings or with `--render-js`; it uses the locally installed Playwright Chromium runtime and is slower than raw-HTML crawling.
-
-Or launch the browser dashboard:
-
-```bash
 npm run dashboard
 ```
 
-Open the displayed local URL, enter any starting page, and watch live robots, sitemap, crawl, PageSpeed, and keyword-analysis progress. Results appear in searchable browser-friendly tables, with DOCX and PDF downloads when LibreOffice is available.
+Open the displayed local URL, enter a starting page, and use the orange gear to configure the audit. The modal provides Quick Scan, SEO Audit, SEO + AIO, Full Audit, and custom configurations.
 
-Use the orange gear to open compact accordion settings for crawl scope, keyword analysis, audit modules, and connected data. Choose a **Quick scan**, **SEO audit**, **SEO + AIO**, **Full audit**, or customize the page limit, crawl pace, exclusions, discovery of up to 5,000 keywords, up to 100 licensed SERP checks, PageSpeed, image, broken-link, and schema analysis. GSC and GA4 CSV exports can be imported locally without sharing Google credentials; GSC query metrics enrich keyword findings and GA4 landing-page metrics enrich matching page records.
+**Full Audit** selects the entire eligible site, all audit modules, discovery of up to 5,000 keywords, and up to 100 licensed SERP checks. GSC and GA4 exports remain optional because they require user-provided data.
 
-**Full Audit** selects the entire eligible site, 5,000 keyword discoveries, 100 SERP checks, PageSpeed, JavaScript rendering, image analysis, broken-link reporting, and schema analysis. GSC and GA4 uploads remain optional because they require user-provided exports, but the settings modal calls them out as recommended performance-data enrichment.
+During a crawl, the dashboard shows live activity, fetched/analyzed/queued counts, throughput, ETA, and the current URL. Completed reports include priorities, pages, content, technical, AIO, keywords, GSC, GA4, images, and findings views.
 
-Unlimited crawls retain safety controls: configurable URL depth, a per-top-level-path URL ceiling, and normalization of common tracking parameters. The dashboard opens completed audits on a prioritized action roadmap and adds dedicated GSC and GA4 views when matching exports were supplied.
+Dashboard controls include:
 
-The dashboard can pause and resume a crawl, stop and generate a partial report, or cancel without generating any report. Standard crawling adds only a 25 ms courtesy delay; Fast mode adds no delay, while Polite mode retains a 250 ms delay.
+- Affected-page drilldowns for priorities and page findings
+- Critical, warning, and informational finding filters
+- Default finding order of Critical → Warning → Info
+- Keyword sorting by source, position, keyword, target score, or confidence
+- Keyword position filters for Top 10, 20, 30, 50, 100, and unavailable rankings
+- GSC query/page search, metric sorting, direction, and position bands
+- GA4 landing-page search, metric sorting, minimum sessions, and key-event filters
 
-The default copyright owner and creator credit are **Jamie C. Collier** and can be overridden with `SCOPE_COPYRIGHT_OWNER` and `SCOPE_CREATOR_NAME`.
+### Finding severity
 
-Completed reports can be downloaded as DOCX or PDF from the dashboard. SCOPE does not collect recipient addresses or send email; users can share the downloaded PDF through their own email service.
+Severity is rule-based and represents likely impact, not a guaranteed ranking outcome:
 
-Useful options:
+- **Critical:** likely blocks or invalidates crawling, indexability, access, or a foundational search requirement.
+- **Warning:** a material quality, performance, or optimization risk that does not necessarily block indexing.
+- **Info:** a non-blocking observation or enhancement opportunity.
+
+### OpenAI and ChatGPT crawler access
+
+OpenAI does not require publishers to place a proprietary discovery file on their websites. For eligibility to appear as cited content in ChatGPT search answers, the relevant control is `robots.txt` access for `OAI-SearchBot`. SCOPE reports this separately from:
+
+- `GPTBot`, which controls potential crawling for training and is independent of ChatGPT search inclusion
+- `ChatGPT-User`, which represents user-initiated page visits and is not a search-indexing control
+
+SCOPE also reports Googlebot and Bingbot access for comparison. A missing `llms.txt` is not treated as an error or ranking problem because OpenAI does not require it. OpenAI-hosted files such as `searchbot.json` publish OpenAI crawler IP ranges and are not files a site owner installs on their own domain.
+
+## Google Search Console imports
+
+Observed GSC queries take precedence over inferred keyword candidates wherever both exist. GSC position is the impression-weighted average over the uploaded report period—not a live, current ranking.
+
+From **Search Console → Performance → Search results**, select the intended date range and search type, enable Clicks, Impressions, Average CTR, and Average position, then export CSV. The standard export may be a ZIP containing several files. The dashboard accepts multiple files:
+
+- `Queries.csv` — required for observed queries, clicks, impressions, CTR, and average position
+- `Dates.csv` — strongly recommended so SCOPE can disclose the exact reporting period
+- `Pages.csv` — optional page aggregate; it cannot connect individual queries to pages by itself
+
+A normal Search Console export does **not** contain a combined Query + Page table. To map each query to landing pages, provide a custom CSV from the Search Analytics API using both `query` and `page` dimensions, or equivalent bulk data from BigQuery. Required columns are Query, Page, Clicks, Impressions, CTR, and Position.
+
+If no `Dates.csv` is supplied, SCOPE explicitly reports that the reporting period is unavailable rather than implying positions are current.
+
+## Google Analytics 4 imports
+
+Export a GA4 report with a primary dimension of **Landing page** or **Landing page + query string**. Recommended columns are Sessions, Active users, Engaged sessions, Engagement rate, and Key events. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows.
+
+Use the same GSC and GA4 period when possible. Uploaded CSV contents are processed locally and omitted from persisted audit configuration.
+
+## Command-line use
+
+Run a full-site audit:
 
 ```bash
-npm run dev -- --url https://example.com --max-pages 500 --max-keywords 100 --pagespeed --out audit-output
+npm run dev -- --url https://example.com
 ```
 
-Exclude one or more sections with comma-separated path prefixes:
+Run a bounded audit with selected modules:
 
 ```bash
-npm run dev -- --url https://example.com --exclude /blog,/careers
+npm run dev -- --url https://example.com \
+  --max-pages 500 \
+  --max-keywords 1000 \
+  --max-rankings 100 \
+  --exclude /blog,/careers \
+  --pagespeed \
+  --render-js \
+  --out audit-output
 ```
 
-The output root contains one folder per domain. Each domain folder contains:
+Use `npm run dev -- --help` for the authoritative CLI option list. Dashboard-only controls currently include data uploads, external-depth crawling, archive exclusion, sitemap-only discovery, and detailed crawl-safety controls.
 
-- `SCOPE-Audit-MM-DD-YYYY.docx` — a formatted document containing all findings
-- `report.json` — complete machine-readable audit data
-- `pages.csv` — page-level metadata and findings
-- `keywords.csv` — keyword targeting, rankings, and competing pages
-- `links.csv` — every discovered internal and external link with source page, anchor text, and destination
-- `images.csv` — every flagged image with its issue, recommendation basis, suggested filename, and suggested alt text
-- `technical.csv` — broken internal links with source page and anchor text, redirect chains, final status, and excluded URLs
+## Reports and output files
 
-For example: `audit-output/example.com/SCOPE-Audit-08-24-2026.docx`.
-
-PageSpeed is off by default because it can be slow and quota-limited. Set `PAGESPEED_API_KEY` and add `--pagespeed` to enable mobile tests.
-
-### Optional image-analysis adapter
-
-Set `IMAGE_ANALYSIS_ENDPOINT` and `IMAGE_ANALYSIS_API_KEY` to enable visual inspection. The endpoint receives a POST body containing `imageUrl`, `pageUrl`, `pageTitle`, `primaryKeywords`, and `currentAlt`, and may return:
-
-```json
-{
-  "description": "A receptionist answering a business call at a desk",
-  "suggestedAlt": "Virtual receptionist answering a customer call",
-  "suggestedFilename": "virtual-receptionist-answering-customer-call.webp"
-}
+```text
+audit-output/
+└── example.com/
+    ├── SCOPE-Audit-MM-DD-YYYY.docx
+    ├── SCOPE-Audit-MM-DD-YYYY.pdf
+    ├── report.json
+    ├── pages.csv
+    ├── keywords.csv
+    ├── links.csv
+    ├── images.csv
+    └── technical.csv
 ```
 
-## Optional licensed SERP integration
+- `report.json` — complete machine-readable audit
+- `pages.csv` — metadata, content metrics, schema, AIO, analytics, and findings
+- `keywords.csv` — inferred and observed keywords, evidence, GSC metrics, rankings, and competing pages
+- `links.csv` — every discovered link with source page, anchor text, and destination
+- `images.csv` — exhaustive image inventory, occurrences, metadata, issues, and recommendations
+- `technical.csv` — broken links, meaningful redirects, gated/authentication flows, checked external pages, and exclusions
+- DOCX is always generated; PDF is available when LibreOffice is installed and conversion succeeds
 
-An interactive run asks whether you have a licensed SERP API. For automation, set:
+SCOPE does not send reports by email. Users download the PDF and share it through their own service.
+
+## Optional integrations
+
+### PageSpeed Insights
+
+PageSpeed is disabled by default because it is slower and may be quota-limited. Set `PAGESPEED_API_KEY` and enable it in the dashboard or pass `--pagespeed`.
+
+### Licensed SERP provider
+
+Without a licensed provider, SERP rankings remain unavailable. GSC average position may still appear when uploaded, but it is not equivalent to a live rank check.
 
 ```bash
 SERP_ENDPOINT=https://your-adapter.example/rank \
@@ -105,7 +162,7 @@ SERP_API_KEY=secret \
 npm run dev -- --url https://example.com --non-interactive
 ```
 
-The endpoint receives an authenticated `POST` request:
+The adapter receives an authenticated POST request:
 
 ```json
 {
@@ -124,8 +181,28 @@ It must return:
 { "position": 8, "rankingUrl": "https://example.com/crawler" }
 ```
 
-This small adapter keeps vendor-specific credentials and response formats outside the crawler. Failed lookups remain unavailable rather than being guessed.
+### Image-analysis adapter
 
-## Important interpretation notes
+Set `IMAGE_ANALYSIS_ENDPOINT` and `IMAGE_ANALYSIS_API_KEY` to enable visual inspection. Without one, recommendations are explicitly based on page context and target keywords.
 
-Keyword candidates are inferred from titles, descriptions, headings, and visible content. Rankings require a provider. CTA selection and cannibalization are confidence-based signals and should be reviewed. GEO/AIO findings are content-readiness heuristics, not promises of inclusion in an AI-generated answer.
+The adapter receives `imageUrl`, `pageUrl`, `pageTitle`, `primaryKeywords`, and `currentAlt`, and may return:
+
+```json
+{
+  "description": "A receptionist answering a business call at a desk",
+  "suggestedAlt": "Virtual receptionist answering a customer call",
+  "suggestedFilename": "virtual-receptionist-answering-customer-call.webp"
+}
+```
+
+## Privacy, security, and interpretation
+
+- API keys are read from environment variables and excluded from report configuration.
+- GSC and GA4 files are processed locally; Google credentials are never requested.
+- Audit only sites you are authorized to crawl and choose an appropriate pace.
+- Keyword targeting, CTA selection, schema suggestions, cannibalization, GEO, and AIO findings are evidence-based heuristics requiring professional review.
+- See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+SCOPE is proprietary. No permission is granted to use, copy, modify, merge, publish, distribute, sublicense, or sell the software without prior written permission from Jamie C. Collier. See [LICENSE](LICENSE).

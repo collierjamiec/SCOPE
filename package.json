@@ -4,6 +4,14 @@
   "description": "SCOPE — full-site SEO, GEO, AI answer-readiness, metadata, keyword, link, schema, image, and performance auditing.",
   "author": "Jamie C. Collier",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/collierjamiec/SCOPE.git"
+  },
+  "bugs": {
+    "url": "https://github.com/collierjamiec/SCOPE/issues"
+  },
+  "keywords": ["seo", "geo", "aio", "crawler", "website-audit", "search-console", "analytics"],
   "private": true,
   "type": "module",
   "bin": {

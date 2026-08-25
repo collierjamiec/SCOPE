@@ -379,9 +379,16 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     const failed = failures.get(link.url)!;
     return { sourcePage: page.url, anchorText: link.text || '[No anchor text]', destination: link.url, status: failed.status ?? null, error: failed.reason };
   }));
-  const aiCrawlerAccess = ['OAI-SearchBot', 'Googlebot', 'Bingbot'].map(crawler => {
+  const crawlerNotes: Record<string, string> = {
+    'OAI-SearchBot': 'Controls eligibility for content to be surfaced in ChatGPT search answers.',
+    GPTBot: 'Controls whether content may be crawled for potential use in training OpenAI generative AI foundation models; this is independent from ChatGPT search.',
+    'ChatGPT-User': 'Represents user-initiated ChatGPT visits; allowing it does not control ChatGPT search inclusion.',
+    Googlebot: 'Controls Google Search crawling.',
+    Bingbot: 'Controls Bing Search crawling.'
+  };
+  const aiCrawlerAccess = ['OAI-SearchBot', 'GPTBot', 'ChatGPT-User', 'Googlebot', 'Bingbot'].map(crawler => {
     const allowed = robots.isAllowed(startUrl, crawler) !== false;
-    return { crawler, allowed, note: allowed ? 'Allowed to fetch the starting page by robots.txt.' : 'Blocked from the starting page by robots.txt.' };
+    return { crawler, allowed, note: `${allowed ? 'Allowed' : 'Blocked'} on the starting page by robots.txt. ${crawlerNotes[crawler]}` };
   });
   const report: AuditReport = {
     domain: new URL(startUrl).hostname,

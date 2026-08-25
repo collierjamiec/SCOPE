@@ -100,4 +100,6 @@ test('crawl respects robots and excludes noindex pages from analysis', async (co
   assert.ok(report.excludedPages.some(page => page.url.includes('/blog/article') && page.reason.includes('configuration')));
   assert.ok(report.brokenLinks.some(link => link.destination.endsWith('/missing') && link.sourcePage.endsWith('/') && link.anchorText === 'Missing page' && link.status === 404));
   assert.ok(report.aiCrawlerAccess.some(item => item.crawler === 'OAI-SearchBot'));
+  assert.ok(report.aiCrawlerAccess.some(item => item.crawler === 'GPTBot' && item.note.includes('independent from ChatGPT search')));
+  assert.ok(report.aiCrawlerAccess.some(item => item.crawler === 'ChatGPT-User' && item.note.includes('user-initiated')));
 });
