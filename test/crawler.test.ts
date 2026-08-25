@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { crawlSite, isExcludedUrl, safeCrawlUrl, validateConfig } from '../src/crawler.js';
+import { crawlSite, isExcludedUrl, needsJavaScriptRendering, safeCrawlUrl, validateConfig } from '../src/crawler.js';
 
 test('accepts an unlimited crawl configuration', () => {
   assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
@@ -20,6 +20,16 @@ test('path exclusions match a section and its descendants without matching simil
   assert.equal(isExcludedUrl('https://example.test/blog', ['/blog']), true);
   assert.equal(isExcludedUrl('https://example.test/blog/article', ['/blog']), true);
   assert.equal(isExcludedUrl('https://example.test/blogger', ['/blog']), false);
+});
+
+test('skips browser rendering for meaningful server-rendered pages', () => {
+  const links = '<a href="/one">One</a><a href="/two">Two</a><a href="/three">Three</a>';
+  const copy = 'Useful server-rendered page content. '.repeat(20);
+  assert.equal(needsJavaScriptRendering(`<html><head><title>Resource</title></head><body><main><h1>Resource</h1>${copy}${links}</main></body></html>`), false);
+});
+
+test('uses browser rendering for thin JavaScript application shells', () => {
+  assert.equal(needsJavaScriptRendering('<html><head><title>App</title></head><body><div id="root"></div><script src="app.js"></script></body></html>'), true);
 });
 
 test('crawl respects robots and excludes noindex pages from analysis', async (context) => {

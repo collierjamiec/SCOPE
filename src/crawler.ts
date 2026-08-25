@@ -56,6 +56,17 @@ export function safeCrawlUrl(url: string, stripTracking = true): string {
 const urlDepth = (url: string) => new URL(url).pathname.split('/').filter(Boolean).length;
 const pathBucket = (url: string) => new URL(url).pathname.split('/').filter(Boolean)[0] ?? '/';
 
+export function needsJavaScriptRendering(html: string): boolean {
+  const $ = cheerio.load(html);
+  const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
+  const meaningfulStructure = $('h1,h2,main,article').length > 0;
+  const discoverableLinks = $('a[href]').length >= 3;
+  const metadata = $('title').text().trim() || $('meta[name="description"]').attr('content')?.trim();
+  // Server-rendered CMS pages already expose everything needed for an SEO audit.
+  // Browser rendering is reserved for thin application shells whose content is populated by JavaScript.
+  return bodyText.length < 400 || !meaningfulStructure || !discoverableLinks || !metadata;
+}
+
 export function validateConfig(config: AuditConfig): void {
   const url = new URL(config.startUrl);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Start URL must use HTTP or HTTPS.');
@@ -210,7 +221,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) { excluded.push({ url: finalUrl, reason: 'Non-HTML content', status: response.status }); return; }
       const rawHtml = await response.text();
       let html = rawHtml, renderError = '';
-      if (input.renderJavaScript) try { html = await renderedHtml(finalUrl); } catch (error) { renderError = String(error); }
+      if (input.renderJavaScript && needsJavaScriptRendering(rawHtml)) try { html = await renderedHtml(finalUrl); } catch (error) { renderError = String(error); }
       const page = extractPage(url, finalUrl, response.status, contentType, html, response.headers, redirectChain, responseTimeMs);
       if (renderError) page.findings.push({ category: 'seo', severity: 'warning', rule: 'javascript_render_failed', message: `JavaScript rendering failed; raw HTML was analyzed. ${renderError}` });
       if (input.analyzeImages !== false) await enrichImageRecommendations(page, input.imageAnalysis);
