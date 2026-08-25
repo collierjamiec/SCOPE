@@ -151,30 +151,48 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const configuredExclusions = input.excludePaths ?? [];
   const pathCounts = new Map<string, number>();
   let renderedBrowser: import('playwright').Browser | undefined;
-  let renderedPage: import('playwright').Page | undefined;
+  let browserLaunch: Promise<import('playwright').Browser> | undefined;
+  let activeRenders = 0;
+  const renderWaiters: Array<() => void> = [];
+  const acquireRenderSlot = async () => {
+    if (activeRenders >= 2) await new Promise<void>(resolve => renderWaiters.push(resolve));
+    activeRenders += 1;
+  };
+  const releaseRenderSlot = () => {
+    activeRenders -= 1;
+    renderWaiters.shift()?.();
+  };
   const renderedHtml = async (url: string) => {
-    process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve('.playwright-browsers');
-    const { chromium } = await import('playwright');
-    renderedBrowser ??= await chromium.launch({ headless: true });
-    if (!renderedPage) {
-      renderedPage = await renderedBrowser.newPage({ userAgent: input.userAgent });
-      await renderedPage.route('**/*', route => ['image', 'media', 'font'].includes(route.request().resourceType()) ? route.abort() : route.continue());
+    await acquireRenderSlot();
+    let page: import('playwright').Page | undefined;
+    try {
+      process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve('.playwright-browsers');
+      if (!browserLaunch) browserLaunch = import('playwright').then(({ chromium }) => chromium.launch({ headless: true }));
+      renderedBrowser = await browserLaunch;
+      page = await renderedBrowser.newPage({ userAgent: input.userAgent });
+      await page.route('**/*', route => {
+        const request = route.request();
+        const host = new URL(request.url()).hostname;
+        const expendable = ['image', 'media', 'font'].includes(request.resourceType());
+        const tracker = /(^|\.)(google-analytics\.com|googletagmanager\.com|doubleclick\.net|facebook\.net|hotjar\.com|clarity\.ms|segment\.io|segment\.com)$/i.test(host);
+        return expendable || tracker ? route.abort() : route.continue();
+      });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+      await page.waitForTimeout(150);
+      return await page.content();
+    } finally {
+      await page?.close().catch(() => undefined);
+      releaseRenderSlot();
     }
-    await renderedPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    await renderedPage.waitForTimeout(250);
-    return renderedPage.content();
   };
   await onProgress({ phase: 'sitemaps', message: `Discovered ${sitemapInfo.pageUrls.length} sitemap URLs`, fetched: 0, analyzed: 0, queued: queue.length, percent: input.maxPages ? 2 : null });
 
-  while (queue.length && (input.maxPages === null || fetched.size < input.maxPages)) {
-    while (control.isPaused() && !control.isCancelled()) { await onProgress({ phase: 'crawling', message: 'Crawl paused', fetched: fetched.size, analyzed: pages.length, queued: queue.length, percent: null }); await sleep(250); }
-    if (control.isCancelled()) break;
-    const url = queue.shift()!;
-    if (fetched.has(url)) continue;
-    if (isExcludedUrl(url, configuredExclusions)) { excluded.push({ url, reason: 'Excluded by audit configuration' }); continue; }
-    if (input.maxDepth !== null && urlDepth(url) > (input.maxDepth ?? 12)) { excluded.push({ url, reason: `Crawl safety: URL depth exceeds ${input.maxDepth ?? 12}` }); continue; }
+  const processUrl = async (url: string) => {
+    if (fetched.has(url) || control.isCancelled()) return;
+    if (isExcludedUrl(url, configuredExclusions)) { excluded.push({ url, reason: 'Excluded by audit configuration' }); return; }
+    if (input.maxDepth !== null && urlDepth(url) > (input.maxDepth ?? 12)) { excluded.push({ url, reason: `Crawl safety: URL depth exceeds ${input.maxDepth ?? 12}` }); return; }
     const bucket = pathBucket(url), bucketCount = pathCounts.get(bucket) ?? 0;
-    if (bucketCount >= (input.maxUrlsPerPath ?? 2000)) { excluded.push({ url, reason: `Crawl safety: more than ${input.maxUrlsPerPath ?? 2000} URLs in /${bucket === '/' ? '' : bucket}` }); continue; }
+    if (bucketCount >= (input.maxUrlsPerPath ?? 2000)) { excluded.push({ url, reason: `Crawl safety: more than ${input.maxUrlsPerPath ?? 2000} URLs in /${bucket === '/' ? '' : bucket}` }); return; }
     pathCounts.set(bucket, bucketCount + 1);
     fetched.add(url);
     await onProgress({
@@ -182,14 +200,14 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       currentUrl: url,
       percent: input.maxPages ? Math.min(92, Math.round((fetched.size / input.maxPages) * 90) + 2) : (queue.length + fetched.size ? Math.min(92, Math.round((fetched.size / (fetched.size + queue.length)) * 90) + 2) : null)
     });
-    if (robots.isAllowed(url, input.userAgent) === false) { excluded.push({ url, reason: 'Disallowed by robots.txt' }); continue; }
+    if (robots.isAllowed(url, input.userAgent) === false) { excluded.push({ url, reason: 'Disallowed by robots.txt' }); return; }
     if (input.delayMs) await sleep(input.delayMs);
     try {
       const { response, finalUrl, redirectChain, responseTimeMs } = await fetchWithRedirects(url, input.userAgent);
       if (redirectChain.length) redirects.push({ source: url, sourcePages: [], chain: redirectChain, finalUrl, finalStatus: response.status });
-      if (!sameHost(finalUrl, startUrl)) { excluded.push({ url, reason: `Redirected outside the audited domain: ${finalUrl}`, status: response.status }); continue; }
+      if (!sameHost(finalUrl, startUrl)) { excluded.push({ url, reason: `Redirected outside the audited domain: ${finalUrl}`, status: response.status }); return; }
       const contentType = response.headers.get('content-type') ?? '';
-      if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) { excluded.push({ url: finalUrl, reason: 'Non-HTML content', status: response.status }); continue; }
+      if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) { excluded.push({ url: finalUrl, reason: 'Non-HTML content', status: response.status }); return; }
       const rawHtml = await response.text();
       let html = rawHtml, renderError = '';
       if (input.renderJavaScript) try { html = await renderedHtml(finalUrl); } catch (error) { renderError = String(error); }
@@ -205,16 +223,23 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
         page.suggestedSchemas = [];
         page.findings = page.findings.filter(finding => !finding.rule.includes('schema'));
       }
-      // Discover allowed same-host URLs even if the current page is non-indexable.
       for (const link of page.links) {
         const destination = clean(link.url);
         if (link.internal && sameHost(destination, startUrl) && !queued.has(destination) && !fetched.has(destination)) { queue.push(destination); queued.add(destination); }
       }
-      if (!page.indexable) { excluded.push({ url: finalUrl, reason: `Non-indexable (${page.robotsDirectives.includes('noindex') ? 'noindex' : `HTTP ${response.status}`})`, status: response.status }); continue; }
-      if (analyzedUrls.has(finalUrl)) continue;
+      if (!page.indexable) { excluded.push({ url: finalUrl, reason: `Non-indexable (${page.robotsDirectives.includes('noindex') ? 'noindex' : `HTTP ${response.status}`})`, status: response.status }); return; }
+      if (analyzedUrls.has(finalUrl)) return;
       analyzedUrls.add(finalUrl);
       pages.push(page);
     } catch (error) { excluded.push({ url, reason: `Fetch error: ${String(error)}` }); }
+  };
+
+  while (queue.length && (input.maxPages === null || fetched.size < input.maxPages)) {
+    while (control.isPaused() && !control.isCancelled()) { await onProgress({ phase: 'crawling', message: 'Crawl paused', fetched: fetched.size, analyzed: pages.length, queued: queue.length, percent: null }); await sleep(250); }
+    if (control.isCancelled()) break;
+    const remaining = input.maxPages === null ? queue.length : Math.min(queue.length, input.maxPages - fetched.size);
+    const batch = queue.splice(0, Math.min(Math.max(1, input.concurrency), remaining));
+    await Promise.all(batch.map(processUrl));
   }
 
   if (input.pageSpeed && !control.isCancelled()) {
