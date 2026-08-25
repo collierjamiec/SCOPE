@@ -1,5 +1,7 @@
 # Changelog
 
+- Added MariaDB/Prisma historical audit storage, versioned trend APIs, a separate trends dashboard, configuration-aware finding deltas, recorded domain merges, irreversible staged history deletion, per-run artifact folders, stable finding fingerprints, orphan-page detection, click depth, schema coverage, crawlable/indexable rate, and time-series snapshots for GSC and PageSpeed metrics.
+
 Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased

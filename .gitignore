@@ -7,5 +7,6 @@ google-search-console.json
 audit-output/
 outputs/
 work/
+src/generated/prisma/
 *.log
 .DS_Store

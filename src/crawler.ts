@@ -55,6 +55,56 @@ export function safeCrawlUrl(url: string, stripTracking = true): string {
 
 const urlDepth = (url: string) => new URL(url).pathname.split('/').filter(Boolean).length;
 const pathBucket = (url: string) => new URL(url).pathname.split('/').filter(Boolean)[0] ?? '/';
+const graphKey = (url: string) => {
+  const value = new URL(url); value.hash = '';
+  if (value.pathname !== '/') value.pathname = value.pathname.replace(/\/+$/, '');
+  return value.href;
+};
+
+export function applyInternalGraphMetrics(pages: PageResult[], startUrl: string, exhaustive: boolean): void {
+  const pageByKey = new Map(pages.map(page => [graphKey(page.url), page]));
+  const root = graphKey(new URL('/', startUrl).href);
+  const fallback = graphKey(startUrl);
+  const start = pageByKey.has(root) ? root : fallback;
+  const depths = new Map<string, number>([[start, 0]]), queue = [start];
+  while (queue.length) {
+    const sourceKey = queue.shift()!, source = pageByKey.get(sourceKey);
+    if (!source) continue;
+    for (const link of source.links.filter(link => link.internal)) {
+      const targetKey = graphKey(link.url);
+      if (!pageByKey.has(targetKey) || depths.has(targetKey)) continue;
+      depths.set(targetKey, (depths.get(sourceKey) ?? 0) + 1); queue.push(targetKey);
+    }
+  }
+  for (const page of pages) {
+    const key = graphKey(page.url);
+    page.clickDepth = depths.get(key) ?? null;
+    page.orphan = exhaustive && key !== start && page.incomingInternalLinks === 0;
+    if (page.orphan && !page.findings.some(finding => finding.rule === 'orphan_page')) page.findings.push({ category: 'seo', severity: 'warning', rule: 'orphan_page', message: 'This indexable page has no discovered incoming internal links.', evidence: 'Discovered outside the internal link graph during an exhaustive crawl.' });
+    if (page.clickDepth !== null && page.clickDepth > 3 && !page.findings.some(finding => finding.rule === 'deep_click_depth')) page.findings.push({ category: 'seo', severity: 'info', rule: 'deep_click_depth', message: `This page is ${page.clickDepth} clicks from the homepage.`, evidence: 'Minimum distance in the crawled internal-link graph.' });
+  }
+}
+
+export function applySitewideStructuralMetrics(pages: PageResult[], excluded: Array<{ url: string; reason: string; status?: number }>) {
+  const pageByKey = new Map(pages.map(page => [graphKey(page.url), page])), excludedByKey = new Map(excluded.map(page => [graphKey(page.url), page]));
+  let canonicalChains = 0, canonicalNon200Targets = 0;
+  for (const page of pages) if (page.canonical) {
+    const target = pageByKey.get(graphKey(page.canonical)), excludedTarget = excludedByKey.get(graphKey(page.canonical));
+    if (target?.canonical && graphKey(target.canonical) !== graphKey(target.url)) { canonicalChains++; page.findings.push({ category: 'seo', severity: 'warning', rule: 'canonical_chain', message: 'The canonical target declares another canonical URL.', evidence: `${page.url} → ${target.url} → ${target.canonical}` }); }
+    if (excludedTarget?.status && excludedTarget.status !== 200) { canonicalNon200Targets++; page.findings.push({ category: 'seo', severity: 'critical', rule: 'canonical_non_200', message: `Canonical target returns HTTP ${excludedTarget.status}.`, evidence: page.canonical }); }
+  }
+  const parent = pages.map((_, index) => index), find = (index: number): number => parent[index] === index ? index : parent[index] = find(parent[index]), join = (a: number, b: number) => { const left = find(a), right = find(b); if (left !== right) parent[right] = left; };
+  const metadata = new Map<string, number>(), buckets = new Map<string, number[]>(), distance = (left: string, right: string) => { let value = BigInt(`0x${left}`) ^ BigInt(`0x${right}`), count = 0; while (value) { value &= value - 1n; count++; } return count; };
+  pages.forEach((page, index) => {
+    for (const value of [page.title, page.metaDescription].filter(Boolean)) { const key = `${page.pageType}:${value.toLowerCase()}`, match = metadata.get(key); if (match !== undefined) join(match, index); else metadata.set(key, index); }
+    if (page.contentFingerprint) { const key = `${page.pageType}:${page.contentFingerprint.slice(0, 3)}:${Math.round(page.wordCount / 250)}`, items = buckets.get(key) ?? []; items.push(index); buckets.set(key, items); }
+  });
+  for (const indexes of buckets.values()) for (let left = 0; left < indexes.length; left++) for (let right = left + 1; right < indexes.length; right++) { const a = pages[indexes[left]], b = pages[indexes[right]]; if (a.contentFingerprint && b.contentFingerprint && distance(a.contentFingerprint, b.contentFingerprint) <= 6) join(indexes[left], indexes[right]); }
+  const groups = new Map<number, number[]>(); pages.forEach((_, index) => { const root = find(index), group = groups.get(root) ?? []; group.push(index); groups.set(root, group); });
+  const duplicates = [...groups.values()].filter(group => group.length > 1);
+  for (const group of duplicates) for (const index of group) pages[index].findings.push({ category: 'seo', severity: 'warning', rule: 'near_duplicate_content', message: `This page is substantially similar to ${group.length - 1} other analyzed page${group.length === 2 ? '' : 's'}.`, evidence: group.filter(item => item !== index).map(item => pages[item].url).join(' | ') });
+  return { canonicalChains, canonicalNon200Targets, nearDuplicateGroups: duplicates.length };
+}
 export function isArchiveUrl(url: string): boolean {
   const candidate = new URL(url);
   return /^\/(tag|category|author)(\/|$)/i.test(candidate.pathname)
@@ -364,6 +414,8 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       if (target) target.incomingInternalLinks += 1;
     }
   }
+  const exhaustiveGraph = input.maxPages === null && !configuredExclusions.length && input.maxDepth === null;
+  applyInternalGraphMetrics(pages, startUrl, exhaustiveGraph);
   await onProgress({ phase: 'keywords', message: 'Scoring keyword targets and checking cannibalization', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98 });
   const keywords = aggregateKeywords(pages, input.maxKeywords);
   const standardGscFiles = input.gscCsvFiles?.length ? input.gscCsvFiles : input.gscCsv ? [input.gscCsv] : [];
@@ -399,6 +451,13 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     const allowed = robots.isAllowed(startUrl, crawler) !== false;
     return { crawler, allowed, note: `${allowed ? 'Allowed' : 'Blocked'} on the starting page by robots.txt. ${crawlerNotes[crawler]}` };
   });
+  const structural = applySitewideStructuralMetrics(pages, excluded);
+  const sitemapKeys = new Set(sitemapInfo.pageUrls.map(graphKey));
+  const schemaEligible = pages.filter(page => !['feed', 'search_archive'].includes(page.pageType ?? ''));
+  const appropriateSchema = (page: PageResult) => page.schemas.some(schema => schema.validJson && schema.types.some(type => !['Organization', 'WebSite', 'BreadcrumbList', 'SiteNavigationElement', 'ImageObject'].includes(type)));
+  const parameterBuckets = new Map<string, number>(); for (const url of fetched) { const item = new URL(url); item.hash = ''; const key = `${item.origin}${item.pathname}`; parameterBuckets.set(key, (parameterBuckets.get(key) ?? 0) + 1); }
+  const blockedKeys = new Set(excluded.filter(item => /robots/i.test(item.reason)).map(item => graphKey(item.url)));
+  const blockedInternallyLinkedPages = new Set(pages.flatMap(page => page.links.filter(link => link.internal && blockedKeys.has(graphKey(link.url))).map(link => graphKey(link.url)))).size;
   const report: AuditReport = {
     domain: new URL(startUrl).hostname,
     config: {
@@ -406,7 +465,17 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
       pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), sitemapOnly: Boolean(input.sitemapOnly), excludeArchives: Boolean(input.excludeArchives), externalCrawlDepth: externalDepth, maxExternalPages: input.maxExternalPages ?? 500, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
-    summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length },
+    summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length,
+      orphanPages: pages.filter(page => page.orphan).length,
+      averageClickDepth: (() => { const values = pages.map(page => page.clickDepth).filter((value): value is number => value !== null && value !== undefined); return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null; })(),
+      schemaCoveragePercent: schemaEligible.length ? schemaEligible.filter(appropriateSchema).length / schemaEligible.length * 100 : null,
+      crawlableIndexableRate: sitemapInfo.pageUrls.length ? pages.filter(page => sitemapKeys.has(graphKey(page.url))).length / sitemapInfo.pageUrls.length * 100 : null,
+      nearDuplicateGroups: structural.nearDuplicateGroups,
+      headingHierarchyViolations: pages.filter(page => page.findings.some(finding => finding.rule === 'heading_hierarchy_skipped')).length,
+      mixedContentPages: pages.filter(page => page.mixedContentResources?.length).length,
+      canonicalSelfReferencePercent: pages.filter(page => page.canonical).length ? pages.filter(page => page.canonicalMatchesUrl).length / pages.filter(page => page.canonical).length * 100 : null,
+      canonicalChains: structural.canonicalChains, canonicalNon200Targets: structural.canonicalNon200Targets,
+      blockedInternallyLinkedPages, parameterDuplicateUrls: [...parameterBuckets.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0) },
     sitemaps: sitemapInfo.results,
     redirects, brokenLinks, externalPages,
     pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length, gscAveragePosition, gscProperty: input.gscProperty, gscDateRange, ga4DateRange }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()

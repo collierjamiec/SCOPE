@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum RunStatus {
+  COMPLETE
+  PARTIAL
+}
+enum ComparisonStatus {
+  BASELINE
+  COMPARABLE
+  PARTIAL
+  NOT_COMPARABLE
+}
+enum DeltaState {
+  OPENED
+  RESOLVED
+  REOPENED
+  PERSISTING
+}
+
+model Domain {
+  id               String        @id @default(cuid())
+  normalizedDomain String        @unique @db.VarChar(255)
+  displayDomain    String        @db.VarChar(255)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  runs             AuditRun[]
+  aliases          DomainAlias[]
+  sourceMerges     DomainMerge[] @relation("MergeSource")
+  targetMerges     DomainMerge[] @relation("MergeTarget")
+}
+
+model DomainAlias {
+  id               String   @id @default(cuid())
+  domainId         String
+  normalizedDomain String   @unique @db.VarChar(255)
+  rawDomain        String?  @db.VarChar(2048)
+  createdAt        DateTime @default(now())
+  domain           Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
+
+model AuditRun {
+  id                    String           @id
+  domainId              String
+  rawStartUrl            String           @db.VarChar(2048)
+  normalizedDomain      String           @db.VarChar(255)
+  generatedAt           DateTime
+  status                RunStatus
+  scanType              String           @db.VarChar(40)
+  configVersion         Int              @default(1)
+  configFingerprint     String           @db.Char(64)
+  rulesetVersion        String           @db.VarChar(40)
+  configJson            Json
+  outputDirectory       String?          @db.VarChar(2048)
+  reportJsonPath        String?          @db.VarChar(2048)
+  pageCount             Int
+  fetchedCount          Int
+  sitemapUrlCount       Int
+  criticalCount         Int
+  warningCount          Int
+  infoCount             Int
+  orphanPageCount       Int
+  averageClickDepth     Float?
+  staleContentCount     Int
+  nearDuplicateGroups   Int
+  headingViolations     Int
+  mixedContentPages     Int
+  canonicalSelfRate     Float?
+  canonicalChains       Int
+  canonicalNon200       Int
+  crawlWasteUrls        Int
+  schemaCoverage        Float?
+  indexableRate         Float?
+  gscAveragePosition    Float?
+  gscPeriodStart        DateTime?
+  gscPeriodEnd          DateTime?
+  ga4PeriodStart        DateTime?
+  ga4PeriodEnd          DateTime?
+  averageLcp            Float?
+  averageCls            Float?
+  averageInp            Float?
+  averageTbt            Float?
+  previousRunId         String?
+  comparisonStatus      ComparisonStatus @default(BASELINE)
+  comparisonNotes       String?          @db.Text
+  createdAt             DateTime         @default(now())
+  domain                Domain           @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  findings              RunFinding[]
+  pageMetrics           RunPageMetric[]
+  deltas                RunDelta[]
+  @@index([domainId, generatedAt])
+}
+
+model RunFinding {
+  id                String   @id @default(cuid())
+  runId             String
+  fingerprint       String   @db.Char(64)
+  ruleId            String   @db.VarChar(160)
+  ruleVersion       Int      @default(1)
+  normalizedPageUrl String   @db.VarChar(2048)
+  category          String   @db.VarChar(20)
+  severity          String   @db.VarChar(20)
+  message           String   @db.Text
+  evidenceJson      Json?
+  createdAt         DateTime @default(now())
+  run               AuditRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@unique([runId, fingerprint])
+  @@index([fingerprint])
+}
+
+model RunPageMetric {
+  id                    String   @id @default(cuid())
+  runId                 String
+  normalizedPageUrl     String   @db.VarChar(2048)
+  pageType              String?  @db.VarChar(50)
+  status                Int
+  indexable             Boolean
+  incomingInternalLinks Int
+  clickDepth            Int?
+  orphan                Boolean
+  schemaEligible        Boolean
+  schemaAppropriate     Boolean
+  contentAgeDays        Int?
+  lcp                   Float?
+  cls                   Float?
+  inp                   Float?
+  tbt                   Float?
+  run                    AuditRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@unique([runId, normalizedPageUrl(768)])
+}
+
+model RunDelta {
+  id            String     @id @default(cuid())
+  runId         String
+  previousRunId String
+  fingerprint   String     @db.Char(64)
+  state         DeltaState
+  createdAt     DateTime   @default(now())
+  run           AuditRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@unique([runId, fingerprint])
+}
+
+model DomainMerge {
+  id             String   @id @default(cuid())
+  sourceDomainId String
+  targetDomainId String
+  performedAt    DateTime @default(now())
+  performedBy    String?  @db.VarChar(255)
+  reason         String?  @db.Text
+  metadataJson   Json?
+  sourceDomain   Domain   @relation("MergeSource", fields: [sourceDomainId], references: [id])
+  targetDomain   Domain   @relation("MergeTarget", fields: [targetDomainId], references: [id])
+}
+
+model HistoryEvent {
+  id          String   @id @default(cuid())
+  action      String   @db.VarChar(80)
+  domainId    String?  @db.VarChar(30)
+  runId       String?  @db.VarChar(50)
+  actor       String?  @db.VarChar(255)
+  detailsJson Json?
+  createdAt   DateTime @default(now())
+}

@@ -1,0 +1,20 @@
+services:
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: scope
+      MARIADB_USER: scope
+      MARIADB_PASSWORD: ${SCOPE_DB_PASSWORD:-scope-local-change-me}
+      MARIADB_ROOT_PASSWORD: ${SCOPE_DB_ROOT_PASSWORD:-scope-root-local-change-me}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - scope-mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  scope-mariadb:

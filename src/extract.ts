@@ -1,4 +1,13 @@
 import * as cheerio from 'cheerio';
+import { createHash } from 'node:crypto';
+
+const simHash = (value: string) => {
+  const counts = new Map<string, number>(); for (const token of value.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []) counts.set(token, (counts.get(token) ?? 0) + 1);
+  const weights = Array<number>(64).fill(0);
+  for (const [token, count] of counts) { const hashed = BigInt(`0x${createHash('sha256').update(token).digest('hex').slice(0, 16)}`); for (let bit = 0; bit < 64; bit++) weights[bit] += (hashed & (1n << BigInt(bit))) ? count : -count; }
+  let result = 0n; for (let bit = 0; bit < 64; bit++) if (weights[bit] >= 0) result |= 1n << BigInt(bit);
+  return result.toString(16).padStart(16, '0');
+};
 import type { CtaInfo, Finding, Heading, ImageRecommendation, LinkInfo, PageResult, SchemaMarkup, SuggestedSchema } from './types.js';
 import { cleanText, normaliseUrl, sameHost } from './util.js';
 import { extractKeywordSignals } from './keywords.js';
@@ -106,6 +115,13 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const hasAuthor = $('meta[name="author" i],[rel="author"],.author,[itemprop="author"]').length > 0;
   const hasPublishedDate = $('time[datetime],meta[property="article:published_time" i],[itemprop="datePublished"]').length > 0;
   const hasModifiedDate = $('meta[property="article:modified_time" i],[itemprop="dateModified"]').length > 0;
+  const dateValue = (selectors: string) => cleanText($(selectors).first().attr('content') || $(selectors).first().attr('datetime')) || null;
+  const publishedDate = dateValue('meta[property="article:published_time" i],meta[itemprop="datePublished"],time[datetime]');
+  const modifiedDate = dateValue('meta[property="article:modified_time" i],meta[itemprop="dateModified"]') || headers.get('last-modified');
+  const contentDate = modifiedDate || publishedDate;
+  const parsedContentDate = contentDate ? Date.parse(contentDate) : NaN;
+  const contentAgeDays = Number.isFinite(parsedContentDate) ? Math.max(0, Math.floor((Date.now() - parsedContentDate) / 86_400_000)) : null;
+  const mixedContentResources = finalUrl.startsWith('https:') ? $('img[src],script[src],iframe[src],source[src],video[src],audio[src],link[rel="stylesheet"][href]').map((_, element) => $(element).attr('src') || $(element).attr('href') || '').get().filter(value => /^http:\/\//i.test(value)) : [];
   const listCount = $('main ol,main ul,article ol,article ul').length;
   const tableCount = $('main table,article table').length;
   $('script:not([type="application/ld+json"]),style,noscript,svg,template').remove();
@@ -117,7 +133,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const metaRobots = $('meta[name="robots" i],meta[name="googlebot" i]').map((_, el) => $(el).attr('content') ?? '').get().join(',');
   const robotsDirectives = `${headerRobots},${metaRobots}`.toLowerCase().split(/[,\s]+/).filter(Boolean);
   const indexable = status >= 200 && status < 300 && !robotsDirectives.includes('noindex') && /text\/html|application\/xhtml\+xml/i.test(contentType);
-  const headings: Heading[] = $('h1,h2').map((_, el) => ({ text: cleanText($(el).text()), level: Number(el.tagName.slice(1)) as 1|2 })).get().filter(h => h.text);
+  const headings: Heading[] = $('h1,h2,h3,h4,h5,h6').map((_, el) => ({ text: cleanText($(el).text()), level: Number(el.tagName.slice(1)) as Heading['level'] })).get().filter(h => h.text);
   const schemas: SchemaMarkup[] = $('script[type="application/ld+json" i]').map((_, el) => {
     const raw = $(el).html()?.trim() ?? '';
     try { const parsed: unknown = JSON.parse(raw); return { raw, parsed, types: schemaTypes(parsed), validJson: true }; }
@@ -177,6 +193,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     primaryCta: findCta($, finalUrl), text, links, contentMetrics,
     internalLinkCount: uniqueInternalLinks.size, externalLinkCount: uniqueExternalLinks.size,
     incomingInternalLinks: 0, imageCount, imagesMissingAltText, images, imageRecommendations, htmlLang, hasViewportMeta,
+    publishedDate, modifiedDate, contentAgeDays, mixedContentResources, contentFingerprint: simHash(text),
     canonicalMatchesUrl: canonical ? canonical === finalUrl : null, responseTimeMs,
     suggestedSchemas: [],
     aio: assessAio({
@@ -193,6 +210,10 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   if (!htmlLang) result.findings.push({ category: 'seo', severity: 'info', rule: 'html_lang_missing', message: 'The HTML lang attribute is missing.' });
   if (imageCount && imagesMissingAltText) result.findings.push({ category: 'seo', severity: 'warning', rule: 'image_alt_missing', message: `${imagesMissingAltText} of ${imageCount} images have empty or missing alt text; decorative images should use an intentional empty alt attribute.` });
   if (canonical && canonical !== finalUrl) result.findings.push({ category: 'seo', severity: 'info', rule: 'canonical_differs', message: `Canonical points to a different URL: ${canonical}` });
+  for (let index = 1; index < headings.length; index++) if (headings[index].level > headings[index - 1].level + 1) { result.findings.push({ category: 'seo', severity: 'warning', rule: 'heading_hierarchy_skipped', message: `Heading hierarchy skips from H${headings[index - 1].level} to H${headings[index].level}.`, evidence: `${headings[index - 1].text} → ${headings[index].text}` }); break; }
+  if (mixedContentResources.length) result.findings.push({ category: 'seo', severity: 'warning', rule: 'mixed_content', message: `${mixedContentResources.length} insecure HTTP resource${mixedContentResources.length === 1 ? '' : 's'} load on this HTTPS page.`, evidence: mixedContentResources.slice(0, 10).join(' | ') });
+  if (contentAgeDays !== null && contentAgeDays > 730) result.findings.push({ category: 'geo', severity: 'warning', rule: 'content_stale', message: `The best available content date is ${contentAgeDays} days old; verify accuracy and update stale material.`, evidence: contentDate ?? undefined });
+  else if (contentAgeDays !== null && contentAgeDays > 365) result.findings.push({ category: 'geo', severity: 'info', rule: 'content_aging', message: `The best available content date is ${contentAgeDays} days old.`, evidence: contentDate ?? undefined });
   if (!archiveTypes.has(pageType) && contentMetrics.fleschKincaidGrade !== null && contentMetrics.fleschKincaidGrade > 12) result.findings.push({ category: 'geo', severity: 'info', rule: 'readability_difficult', message: `Flesch-Kincaid grade level is ${contentMetrics.fleschKincaidGrade}; consider simplifying copy where a broad audience is intended.` });
   if (!archiveTypes.has(pageType) && contentMetrics.averageWordsPerSentence > 25) result.findings.push({ category: 'geo', severity: 'info', rule: 'long_sentences', message: `Average sentence length is ${contentMetrics.averageWordsPerSentence} words; shorter sentences may improve scanability.` });
   for (const indicator of result.aio.indicators.filter(item => item.status !== 'pass' && !archiveTypes.has(pageType))) {

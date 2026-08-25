@@ -44,3 +44,13 @@ test('classifies archive pages and applies archive-specific findings', () => {
   assert.ok(result.findings.some(finding => finding.rule === 'indexable_archive_review'));
   assert.ok(!result.findings.some(finding => finding.rule === 'thin_content' || finding.rule === 'meta_description_missing'));
 });
+
+test('captures hierarchy, staleness, and active mixed-content measurements', () => {
+  const html = '<html><head><title>Older guide</title><meta property="article:modified_time" content="2020-01-01"><link rel="stylesheet" href="http://cdn.example.test/site.css"></head><body><main><h1>Guide</h1><h3>Skipped level</h3><a href="http://example.org/reference">ordinary external link</a><p>Useful content.</p></main></body></html>';
+  const result = extractPage('https://example.test/guide', 'https://example.test/guide', 200, 'text/html', html, new Headers());
+  assert.deepEqual(result.headings.map(heading => heading.level), [1, 3]);
+  assert.ok(result.findings.some(finding => finding.rule === 'heading_hierarchy_skipped'));
+  assert.ok(result.findings.some(finding => finding.rule === 'content_stale'));
+  assert.deepEqual(result.mixedContentResources, ['http://cdn.example.test/site.css']);
+  assert.ok(result.findings.some(finding => finding.rule === 'mixed_content'));
+});

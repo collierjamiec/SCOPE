@@ -6,6 +6,9 @@ import { crawlSite } from './crawler.js';
 import { auditDocumentFilename, createAuditDocument } from './document.js';
 import { imagesCsv, keywordsCsv, linksCsv, pagesCsv, technicalCsv } from './report.js';
 import type { AuditConfig, SerpConfig } from './types.js';
+import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { persistAuditRun } from './history.js';
 
 function option(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -65,7 +68,8 @@ SERP_API_KEY. The endpoint adapter contract is documented in README.md.`);
   const report = await crawlSite(config, progress => console.log(`[${progress.phase}] ${progress.message} — ${progress.fetched} fetched, ${progress.analyzed} analyzed, ${progress.queued} queued`));
   const outputRoot = option('out') ?? 'audit-output';
   const safeDomain = report.domain.replace(/[^a-z0-9.-]+/gi, '_');
-  const directory = `${outputRoot}/${safeDomain}`;
+  const runId = randomUUID();
+  const directory = `${outputRoot}/${safeDomain}/${runId}`;
   await mkdir(directory, { recursive: true });
   const documentName = auditDocumentFilename(new Date(report.generatedAt));
   const documentBuffer = await createAuditDocument(report);
@@ -78,6 +82,7 @@ SERP_API_KEY. The endpoint adapter contract is documented in README.md.`);
     writeFile(`${directory}/technical.csv`, technicalCsv(report)),
     writeFile(`${directory}/${documentName}`, documentBuffer)
   ]);
+  await persistAuditRun(runId, report, resolve(directory));
   console.log(`Analyzed ${report.summary.indexablePagesAnalyzed} indexable pages; excluded ${report.summary.excludedNonIndexable}.`);
   console.log(`Identified ${report.summary.keywordsIdentified} keyword candidates and ${report.cannibalization.length} cannibalization flags.`);
   console.log(`Reports written to ${directory}/`);

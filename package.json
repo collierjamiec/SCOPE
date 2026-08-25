@@ -11,28 +11,44 @@
   "bugs": {
     "url": "https://github.com/collierjamiec/SCOPE/issues"
   },
-  "keywords": ["seo", "geo", "aio", "crawler", "website-audit", "search-console", "analytics"],
+  "keywords": [
+    "seo",
+    "geo",
+    "aio",
+    "crawler",
+    "website-audit",
+    "search-console",
+    "analytics"
+  ],
   "private": true,
   "type": "module",
   "bin": {
     "site-audit": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
     "dashboard": "tsx src/dashboard.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "start": "node dist/cli.js",
-    "start:dashboard": "node dist/dashboard.js"
+    "start:dashboard": "node dist/dashboard.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy"
   },
   "dependencies": {
+    "@prisma/adapter-mariadb": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "cheerio": "^1.1.2",
     "docx": "^9.5.1",
+    "mariadb": "^3.5.3",
     "playwright": "^1.62.1",
     "robots-parser": "^3.0.1"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "dotenv": "^17.4.2",
+    "prisma": "^7.10.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }

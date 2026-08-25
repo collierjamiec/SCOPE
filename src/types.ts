@@ -53,7 +53,7 @@ export interface SerpConfig {
   device?: "desktop" | "mobile";
 }
 
-export interface Heading { text: string; level: 1 | 2 }
+export interface Heading { text: string; level: 1 | 2 | 3 | 4 | 5 | 6 }
 export interface LinkInfo { text: string; url: string; internal: boolean }
 export interface ImageRecommendation {
   src: string;
@@ -195,6 +195,15 @@ export interface PageResult {
   internalLinkCount: number;
   externalLinkCount: number;
   incomingInternalLinks: number;
+  /** Minimum internal-link distance from the audited homepage; null means unreachable. */
+  clickDepth?: number | null;
+  /** True only when the crawl was exhaustive enough to make the zero-inlink signal meaningful. */
+  orphan?: boolean;
+  publishedDate?: string | null;
+  modifiedDate?: string | null;
+  contentAgeDays?: number | null;
+  mixedContentResources?: string[];
+  contentFingerprint?: string;
   imageCount: number;
   imagesMissingAltText: number;
   images: ImageInventoryItem[];
@@ -228,6 +237,18 @@ export interface AuditReport {
     keywordsIdentified: number;
     rankingsChecked: number;
     sitemapPageUrls: number;
+    orphanPages?: number;
+    averageClickDepth?: number | null;
+    schemaCoveragePercent?: number | null;
+    crawlableIndexableRate?: number | null;
+    nearDuplicateGroups?: number;
+    headingHierarchyViolations?: number;
+    mixedContentPages?: number;
+    canonicalSelfReferencePercent?: number | null;
+    canonicalChains?: number;
+    canonicalNon200Targets?: number;
+    blockedInternallyLinkedPages?: number;
+    parameterDuplicateUrls?: number;
   };
   sitemaps: SitemapResult[];
   redirects: RedirectResult[];

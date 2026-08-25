@@ -113,7 +113,7 @@ function pageSection(page: PageResult, index: number, config: AuditReport['confi
         ['Content', `${page.wordCount.toLocaleString()} words`, 'Headings', `${page.h1s.length} H1 / ${page.h2s.length} H2`],
         ['Readability', `Grade ${page.contentMetrics.fleschKincaidGrade ?? 'n/a'} / ease ${page.contentMetrics.fleschReadingEase ?? 'n/a'}`, 'Reading time', `${page.contentMetrics.readingTimeMinutes} minutes`],
         ['Sentences / paragraphs', `${page.contentMetrics.sentenceCount} / ${page.contentMetrics.paragraphCount}`, 'Text / HTML ratio', `${page.contentMetrics.textToHtmlRatio}%`],
-        ['Unique links', `${page.internalLinkCount} internal / ${page.externalLinkCount} external`, 'Incoming internal', page.incomingInternalLinks],
+        ['Unique links', `${page.internalLinkCount} internal / ${page.externalLinkCount} external`, 'Incoming / depth', `${page.incomingInternalLinks} / ${page.clickDepth ?? 'unreachable'}${page.orphan ? ' (orphan)' : ''}`],
         ['Images', `${page.imageCount} total / ${page.imagesMissingAltText} missing alt text`, 'Language / viewport', `${page.htmlLang ?? 'missing'} / ${page.hasViewportMeta ? 'present' : 'missing'}`],
         ['Canonical', page.canonical ?? 'Missing', 'Canonical match', page.canonicalMatchesUrl === null ? 'n/a' : page.canonicalMatchesUrl ? 'Yes' : 'No']
       ],
@@ -193,7 +193,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
     return [...counts.values()].filter(count => count > 1).length;
   };
   const average = (values: number[]) => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
-  const orphanCandidates = report.pages.filter(page => page.url !== report.config.startUrl && (page.incomingInternalLinks ?? 0) === 0).length;
+  const orphanCandidates = report.summary.orphanPages ?? report.pages.filter(page => page.orphan).length;
   const aioPages = report.pages.filter(page => page.aio);
   const averageAio = average(aioPages.map(page => page.aio.score));
   const keywordPosition = (keyword: AuditReport['keywords'][number]) => keyword.searchConsole?.position ?? keyword.ranking?.position ?? null;
@@ -241,7 +241,11 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
         ['Missing titles / descriptions', `${report.pages.filter(page => !page.title).length} / ${report.pages.filter(page => !page.metaDescription).length}`, 'Missing H1 / canonical', `${report.pages.filter(page => !page.h1s.length).length} / ${report.pages.filter(page => !page.canonical).length}`],
         ['Possible orphan pages', orphanCandidates, 'Pages with valid JSON-LD', report.pages.filter(page => page.schemas.some(schema => schema.validJson)).length],
         ['Average word count', average(report.pages.map(page => page.wordCount)), 'Average response time', `${average(report.pages.map(page => page.responseTimeMs ?? 0).filter(Boolean))} ms`],
-        ['Images missing alt text', report.pages.reduce((sum, page) => sum + (page.imagesMissingAltText ?? 0), 0), 'Canonical mismatches', report.pages.filter(page => page.canonicalMatchesUrl === false).length]
+        ['Images missing alt text', report.pages.reduce((sum, page) => sum + (page.imagesMissingAltText ?? 0), 0), 'Canonical mismatches', report.pages.filter(page => page.canonicalMatchesUrl === false).length],
+        ['Average click depth', report.summary.averageClickDepth?.toFixed(1) ?? 'n/a', 'Near-duplicate groups', report.summary.nearDuplicateGroups ?? 0],
+        ['Appropriate schema coverage', report.summary.schemaCoveragePercent === null || report.summary.schemaCoveragePercent === undefined ? 'n/a' : `${report.summary.schemaCoveragePercent.toFixed(1)}%`, 'Crawlable/indexable rate', report.summary.crawlableIndexableRate === null || report.summary.crawlableIndexableRate === undefined ? 'n/a' : `${report.summary.crawlableIndexableRate.toFixed(1)}%`],
+        ['Heading hierarchy violations', report.summary.headingHierarchyViolations ?? 0, 'HTTPS mixed-content pages', report.summary.mixedContentPages ?? 0],
+        ['Canonical chains / non-200 targets', `${report.summary.canonicalChains ?? 0} / ${report.summary.canonicalNon200Targets ?? 0}`, 'Crawl-waste URLs', (report.summary.blockedInternallyLinkedPages ?? 0) + (report.summary.parameterDuplicateUrls ?? 0)]
       ],
       [2200, 2480, 2200, 2480]
     ),

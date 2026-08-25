@@ -51,6 +51,29 @@ Open the displayed local URL, enter a starting page, and use the orange gear to 
 
 During a crawl, the dashboard shows live activity, fetched/analyzed/queued counts, throughput, ETA, and the current URL. Completed reports include priorities, pages, content, technical, AIO, keywords, GSC, GA4, images, and findings views.
 
+## Historical trends and MariaDB
+
+SCOPE can retain every completed and intentionally saved partial audit in MariaDB. Audit history is disabled until `DATABASE_URL` is configured; ordinary standalone audits continue to work without a database. Copy `.env.example` to `.env`, replace both example database passwords, start MariaDB with `docker compose up -d mariadb`, then run:
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+For a new local database without migration deployment, `npm run db:push` can synchronize the schema. Production and shared installations should use migrations.
+
+The separate `/trends` dashboard provides domain selection, severity and finding-movement charts, structural/search/performance metrics, configuration-comparability warnings, and a retained run table. Historical endpoints are versioned under `/api/v1/trends`. The browser dashboard remains bound to `127.0.0.1`; a future remotely exposed API should add authenticated, domain-scoped API keys before changing that binding.
+
+Each run receives a stable ID and its own `audit-output/<domain>/<run-id>/` directory, preventing later audits from overwriting earlier files. Database records store structured metrics and artifact paths, not PDFs, OAuth tokens, API keys, or uploaded CSV contents.
+
+Findings use a stable SHA-256 fingerprint derived from normalized domain, normalized page URL, durable rule ID, and a rule-specific discriminator where required. Comparisons report opened, resolved, reopened, and persisting findings. Runs with different comparison-affecting configurations or ruleset versions are explicitly marked partially comparable or not comparable.
+
+History is retained indefinitely. Deleting a run or a domain’s complete history requires typing the exact displayed confirmation phrase. SCOPE removes both database records and the corresponding run directories using a staged quarantine process. Domain migrations are manual, recorded with a reason and actor, and preserve the original domain on historical runs.
+
+The crawl graph now derives minimum click depth and confirmed orphan pages when the crawl is exhaustive. Pages reached only from sitemaps or other discovery sources with zero incoming internal links are reported as orphans; bounded/custom crawls do not make that definitive claim. Trend snapshots also retain stale-content counts, near-duplicate groups, heading-hierarchy violations, active mixed-content pages, canonical self-reference rate, canonical chains/non-200 targets, crawl-waste signals, schema coverage, crawlable/indexable rate, average GSC position, and available Core Web Vitals diagnostics.
+
+Schema coverage is the percentage of analyzed pages carrying page-appropriate structured data, not merely generic sitewide schema. Crawlable/indexable rate uses sitemap URLs as its denominator. Canonical self-reference rate uses pages with a declared canonical as its denominator. Content is labeled stale after two years and aging after one year; these are review prompts, not automatic recommendations to change evergreen publication dates. Near-duplicate detection combines exact title/description matches with locality-bucketed SimHash candidates so large sites do not incur an all-pairs comparison.
+
 Dashboard controls include:
 
 - A written executive summary covering overall health, severity mix, leading themes, and audit context without reproducing the detailed tables
@@ -152,14 +175,15 @@ Use `npm run dev -- --help` for the authoritative CLI option list. Dashboard-onl
 ```text
 audit-output/
 └── example.com/
-    ├── SCOPE-Audit-MM-DD-YYYY.docx
-    ├── SCOPE-Audit-MM-DD-YYYY.pdf
-    ├── report.json
-    ├── pages.csv
-    ├── keywords.csv
-    ├── links.csv
-    ├── images.csv
-    └── technical.csv
+    └── <run-id>/
+        ├── SCOPE-Audit-MM-DD-YYYY.docx
+        ├── SCOPE-Audit-MM-DD-YYYY.pdf
+        ├── report.json
+        ├── pages.csv
+        ├── keywords.csv
+        ├── links.csv
+        ├── images.csv
+        └── technical.csv
 ```
 
 - `report.json` — complete machine-readable audit
