@@ -49,6 +49,8 @@ Use the orange gear to open compact accordion settings for crawl scope, keyword 
 
 Unlimited crawls retain safety controls: configurable URL depth, a per-top-level-path URL ceiling, and normalization of common tracking parameters. The dashboard opens completed audits on a prioritized action roadmap and adds dedicated GSC and GA4 views when matching exports were supplied.
 
+The dashboard can pause and resume a crawl, stop and generate a partial report, or cancel without generating any report. Standard crawling adds only a 25 ms courtesy delay; Fast mode adds no delay, while Polite mode retains a 250 ms delay.
+
 The default copyright owner and creator credit are **Jamie C. Collier** and can be overridden with `SCOPE_COPYRIGHT_OWNER` and `SCOPE_CREATOR_NAME`.
 
 Completed reports can be downloaded as DOCX or PDF from the dashboard. SCOPE does not collect recipient addresses or send email; users can share the downloaded PDF through their own email service.

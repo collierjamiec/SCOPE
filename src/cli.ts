@@ -56,7 +56,7 @@ SERP_API_KEY. The endpoint adapter contract is documented in README.md.`);
   const excludePaths = (option('exclude') ?? '').split(',').map(value => value.trim()).filter(Boolean);
   const config: AuditConfig = {
     startUrl, maxPages: !maxPagesOption || maxPagesOption.toLowerCase() === 'all' ? null : Number(maxPagesOption), maxKeywords: Number(option('max-keywords') ?? 100), maxRankings: Number(option('max-rankings') ?? 100),
-    concurrency: 1, delayMs: Number(option('delay-ms') ?? 250), userAgent: 'OrganicSiteAuditor/0.1 (+respectful SEO audit)',
+    concurrency: 1, delayMs: Number(option('delay-ms') ?? 25), userAgent: 'OrganicSiteAuditor/0.1 (+respectful SEO audit)',
     pageSpeed: flag('pagespeed'), pageSpeedApiKey: process.env.PAGESPEED_API_KEY, serp,
     imageAnalysis: process.env.IMAGE_ANALYSIS_ENDPOINT && process.env.IMAGE_ANALYSIS_API_KEY ? { endpoint: process.env.IMAGE_ANALYSIS_ENDPOINT, apiKey: process.env.IMAGE_ANALYSIS_API_KEY } : undefined,
     excludePaths, analyzeImages: !flag('no-images'), reportBrokenLinks: !flag('no-broken-links'), analyzeSchema: !flag('no-schema'), renderJavaScript: flag('render-js')
