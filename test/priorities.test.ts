@@ -13,3 +13,10 @@ test('ranks widespread critical findings ahead of informational findings', () =>
   assert.equal(result[0].affectedPages, 2);
   assert.deepEqual(result[0].affectedUrls, ['https://example.com/a', 'https://example.com/b']);
 });
+
+test('does not promote a widespread informational archive review to high impact', () => {
+  const pages: any[] = Array.from({ length: 20 }, (_, index) => ({ url: `https://example.com/category/${index}`, findings: [{ rule: 'indexable_archive_review', category: 'seo', severity: 'info', message: 'Indexable category archive confirmed.' }] }));
+  const [result] = buildPriorities(pages);
+  assert.equal(result.impact, 'low');
+  assert.match(result.recommendation, /currently indexable/i);
+});

@@ -19,6 +19,18 @@ export function sameHost(a: string, b: string): boolean {
   return new URL(a).hostname === new URL(b).hostname;
 }
 
+export function equivalentUrl(a: string, b: string): boolean {
+  const normalize = (value: string) => {
+    const url = new URL(value);
+    url.hash = '';
+    url.hostname = url.hostname.toLowerCase();
+    if (url.pathname !== '/') url.pathname = url.pathname.replace(/\/+$/, '');
+    url.searchParams.sort();
+    return url.href;
+  };
+  try { return normalize(a) === normalize(b); } catch { return false; }
+}
+
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let cursor = 0;

@@ -9,7 +9,7 @@ const simHash = (value: string) => {
   return result.toString(16).padStart(16, '0');
 };
 import type { CtaInfo, Finding, Heading, ImageRecommendation, LinkInfo, PageResult, SchemaMarkup, SuggestedSchema } from './types.js';
-import { cleanText, normaliseUrl, sameHost } from './util.js';
+import { cleanText, equivalentUrl, normaliseUrl, sameHost } from './util.js';
 import { extractKeywordSignals } from './keywords.js';
 import { assessAio } from './aio.js';
 import { measureReadability } from './readability.js';
@@ -117,7 +117,6 @@ function findingsFor(page: Pick<PageResult, 'title'|'metaDescription'|'metaDescr
   if (!archive && page.schemas.length === 0) out.push({ category: 'geo', severity: 'info', rule: 'schema_missing', message: 'No JSON-LD markup was found.' });
   for (const [index, schema] of page.schemas.entries()) if (!schema.validJson) out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: `JSON-LD block ${index + 1} is invalid: ${schema.error ?? 'unknown parse error'}`, evidence: schema.raw.slice(0, 500) });
   for (const [index, schema] of page.schemas.entries()) for (const issue of schema.validationIssues ?? []) out.push({ category: 'seo', severity: 'warning', rule: 'schema_missing_core_property', message: `JSON-LD block ${index + 1}: ${issue}.`, evidence: schema.types.join(', ') });
-  if (archive) out.push({ category: 'seo', severity: page.pageType === 'search_archive' ? 'warning' : 'info', rule: 'indexable_archive_review', message: `Indexable ${page.pageType.replaceAll('_', ' ')} detected; confirm that indexing, canonicalization, pagination, and listing quality are intentional.` });
   return out;
 }
 
@@ -219,7 +218,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     internalLinkCount: uniqueInternalLinks.size, externalLinkCount: uniqueExternalLinks.size,
     incomingInternalLinks: 0, imageCount, imagesMissingAltText, images, imageRecommendations, htmlLang, hasViewportMeta,
     publishedDate, modifiedDate, contentAgeDays, mixedContentResources, contentFingerprint: simHash(text),
-    canonicalMatchesUrl: canonical ? canonical === finalUrl : null, responseTimeMs,
+    canonicalMatchesUrl: canonical ? equivalentUrl(canonical, finalUrl) : null, responseTimeMs,
     suggestedSchemas: [],
     aio: assessAio({
       title, metaDescription, h1s, h2s, text, robotsDirectives,
@@ -234,7 +233,8 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   if (!hasViewportMeta) result.findings.push({ category: 'seo', severity: 'warning', rule: 'viewport_missing', message: 'Viewport meta tag is missing; mobile rendering may be impaired.' });
   if (!htmlLang) result.findings.push({ category: 'seo', severity: 'info', rule: 'html_lang_missing', message: 'The HTML lang attribute is missing.' });
   if (imageCount && imagesMissingAltText) result.findings.push({ category: 'seo', severity: 'warning', rule: 'image_alt_missing', message: `${imagesMissingAltText} of ${imageCount} images have empty or missing alt text; decorative images should use an intentional empty alt attribute.` });
-  if (canonical && canonical !== finalUrl) result.findings.push({ category: 'seo', severity: 'info', rule: 'canonical_differs', message: `Canonical points to a different URL: ${canonical}` });
+  if (canonical && !equivalentUrl(canonical, finalUrl)) result.findings.push({ category: 'seo', severity: 'info', rule: 'canonical_differs', message: `Canonical points to a materially different URL: ${canonical}` });
+  if (archiveTypes.has(pageType) && indexable) result.findings.push({ category: 'seo', severity: pageType === 'search_archive' ? 'warning' : 'info', rule: 'indexable_archive_review', message: `Indexable ${pageType.replaceAll('_', ' ')} confirmed: HTTP ${status}, no noindex directive detected${canonical ? `, and canonical ${equivalentUrl(canonical, finalUrl) ? 'is self-referencing' : `points to ${canonical}`}` : ', with no canonical declared'}. Review whether search indexing, pagination, and listing quality are intentional.`, evidence: `robots directives: ${robotsDirectives.length ? robotsDirectives.join(', ') : 'none detected'}; indexable: yes` });
   for (let index = 1; index < headings.length; index++) if (headings[index].level > headings[index - 1].level + 1) { result.findings.push({ category: 'seo', severity: 'warning', rule: 'heading_hierarchy_skipped', message: `Heading hierarchy skips from H${headings[index - 1].level} to H${headings[index].level}.`, evidence: `${headings[index - 1].text} → ${headings[index].text}` }); break; }
   if (mixedContentResources.length) result.findings.push({ category: 'seo', severity: 'warning', rule: 'mixed_content', message: `${mixedContentResources.length} insecure HTTP resource${mixedContentResources.length === 1 ? '' : 's'} load on this HTTPS page.`, evidence: mixedContentResources.slice(0, 10).join(' | ') });
   if (contentAgeDays !== null && contentAgeDays > 730) result.findings.push({ category: 'geo', severity: 'warning', rule: 'content_stale', message: `The best available content date is ${contentAgeDays} days old; verify accuracy and update stale material.`, evidence: contentDate ?? undefined });

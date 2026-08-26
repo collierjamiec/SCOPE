@@ -12,6 +12,7 @@ const fixes: Record<string, { effort: 'low' | 'medium' | 'high'; recommendation:
   image_alt_missing: { effort: 'medium', recommendation: 'Review the listed images and add distinct descriptive alt attributes to informative images; retain intentional empty alt attributes only for decorative images.' },
   canonical_missing: { effort: 'low', recommendation: 'Add a self-referencing canonical to each canonical indexable page.' },
   canonical_differs: { effort: 'medium', recommendation: 'Verify that each differing canonical intentionally consolidates the page; correct accidental cross-page canonicalization.' },
+  indexable_archive_review: { effort: 'low', recommendation: 'These archives are currently indexable. Keep them indexable only when they provide a useful, unique listing experience; otherwise apply noindex,follow deliberately and keep their links crawlable.' },
   viewport_missing: { effort: 'low', recommendation: 'Add a responsive viewport meta tag to the shared page template.' },
   heading_hierarchy_skipped: { effort: 'low', recommendation: 'Reorder heading levels so sections descend without skipping levels while preserving the visual design.' },
   mixed_content: { effort: 'medium', recommendation: 'Replace each reported HTTP asset URL with an HTTPS URL or remove the insecure resource.' },
@@ -34,7 +35,7 @@ export function buildPriorities(pages: PageResult[]) {
     group.pages.add(page.url); groups.set(key, group);
   }
   return [...groups.entries()].map(([rule, group]) => {
-    const impact = group.severity === 'critical' || group.pages.size >= Math.max(3, pages.length * 0.3) ? 'high' as const : group.severity === 'warning' ? 'medium' as const : 'low' as const;
+    const impact = group.severity === 'critical' || (group.severity === 'warning' && group.pages.size >= Math.max(3, pages.length * 0.3)) ? 'high' as const : group.severity === 'warning' ? 'medium' as const : 'low' as const;
     const known = fixes[rule];
     return { area: group.area, issue: group.issue, impact, effort: known?.effort ?? (impact === 'high' ? 'medium' as const : 'low' as const), affectedPages: group.pages.size, affectedUrls: [...group.pages].sort(), recommendation: known?.recommendation ?? fallbackRecommendation(rule, group.pages.size) };
   }).sort((a, b) => ({ high: 3, medium: 2, low: 1 }[b.impact] - { high: 3, medium: 2, low: 1 }[a.impact] || b.affectedPages - a.affectedPages)).slice(0, 25).map((item, index) => ({ rank: index + 1, ...item }));

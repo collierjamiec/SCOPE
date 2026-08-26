@@ -41,8 +41,22 @@ test('classifies archive pages and applies archive-specific findings', () => {
   assert.equal(classifyPageType('https://example.test/?s=scope', false), 'search_archive');
   const result = extractPage('https://example.test/category/news/', 'https://example.test/category/news/', 200, 'text/html', '<title>News</title><h1>News</h1><p>Short listing.</p>', new Headers());
   assert.equal(result.pageType, 'category_archive');
-  assert.ok(result.findings.some(finding => finding.rule === 'indexable_archive_review'));
+  const archiveFinding = result.findings.find(finding => finding.rule === 'indexable_archive_review');
+  assert.match(archiveFinding?.message ?? '', /HTTP 200, no noindex directive detected/);
+  assert.match(archiveFinding?.evidence ?? '', /indexable: yes/);
   assert.ok(!result.findings.some(finding => finding.rule === 'thin_content' || finding.rule === 'meta_description_missing'));
+});
+
+test('treats a trailing-slash-only canonical as self-referencing', () => {
+  const result = extractPage('https://example.test/blog/', 'https://example.test/blog/', 200, 'text/html', '<title>Blog</title><link rel="canonical" href="https://example.test/blog"><h1>Blog</h1>', new Headers());
+  assert.equal(result.canonicalMatchesUrl, true);
+  assert.ok(!result.findings.some(finding => finding.rule === 'canonical_differs'));
+});
+
+test('does not call a noindex category archive indexable', () => {
+  const result = extractPage('https://example.test/category/news/', 'https://example.test/category/news/', 200, 'text/html', '<title>News</title><meta name="robots" content="noindex,follow"><h1>News</h1>', new Headers());
+  assert.equal(result.indexable, false);
+  assert.ok(!result.findings.some(finding => finding.rule === 'indexable_archive_review'));
 });
 
 test('captures hierarchy, staleness, and active mixed-content measurements', () => {
