@@ -1,5 +1,11 @@
 # Changelog
 
+- Reviewed the supplied SE Ranking PATLive and Queer & Unbroken audits and added a documented expansion roadmap covering technical-check parity, content authority, competitive strategy, CRO, evidence quality, and staged delivery.
+- Unified domain identity across history, competitor relationships, provider imports, and dashboard joins; SE Ranking competitor and Share of Voice imports now use the same scheme/`www`/case/default-port normalization.
+- Classified broad platforms and reference sites separately from market competitor candidates, kept them visible as SERP competition, and excluded them from bulk competitor creation.
+- Expanded live audit progress with URLs fetched, pages analyzed, accumulated Critical/Warning/Info counts, elapsed time, throughput, and ETA, followed by explicit analysis, file-writing, PDF-generation, and history-retention states.
+- Documented that live competitor audits automatically become historical baselines/runs and that repeated provider imports form separately labeled provider-specific trend series.
+
 - Added MariaDB/Prisma historical audit storage, versioned trend APIs, a separate trends dashboard, configuration-aware finding deltas, recorded domain merges, irreversible staged history deletion, per-run artifact folders, stable finding fingerprints, orphan-page detection, click depth, schema coverage, crawlable/indexable rate, and time-series snapshots for GSC and PageSpeed metrics.
 
 Notable changes to SCOPE are documented here. Dates use ISO format.

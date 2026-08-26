@@ -19,13 +19,16 @@ const robotsParser = require('robots-parser') as (url: string, body: string) => 
 };
 
 export interface CrawlProgress {
-  phase: 'starting' | 'robots' | 'sitemaps' | 'crawling' | 'external' | 'pagespeed' | 'keywords' | 'complete';
+  phase: 'starting' | 'robots' | 'sitemaps' | 'crawling' | 'external' | 'pagespeed' | 'keywords' | 'analysis' | 'reporting' | 'complete';
   message: string;
   fetched: number;
   analyzed: number;
   queued: number;
   currentUrl?: string;
   percent: number | null;
+  critical?: number;
+  warnings?: number;
+  info?: number;
 }
 
 export type ProgressReporter = (progress: CrawlProgress) => void | Promise<void>;
@@ -261,6 +264,14 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   const queued = new Set(queue);
   const fetched = new Set<string>();
   const pages: PageResult[] = [];
+  const findingCounts = () => {
+    const findings = pages.flatMap(page => page.findings);
+    return {
+      critical: findings.filter(finding => finding.severity === 'critical').length,
+      warnings: findings.filter(finding => finding.severity === 'warning').length,
+      info: findings.filter(finding => finding.severity === 'info').length
+    };
+  };
   const analyzedUrls = new Set<string>();
   const redirects: AuditReport['redirects'] = [];
   const excluded: AuditReport['excludedPages'] = [];
@@ -315,7 +326,8 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     await onProgress({
       phase: 'crawling', message: `Fetching ${url}`, fetched: fetched.size, analyzed: pages.length, queued: queue.length,
       currentUrl: url,
-      percent: input.maxPages ? Math.min(92, Math.round((fetched.size / input.maxPages) * 90) + 2) : (queue.length + fetched.size ? Math.min(92, Math.round((fetched.size / (fetched.size + queue.length)) * 90) + 2) : null)
+      percent: input.maxPages ? Math.min(92, Math.round((fetched.size / input.maxPages) * 90) + 2) : (queue.length + fetched.size ? Math.min(92, Math.round((fetched.size / (fetched.size + queue.length)) * 90) + 2) : null),
+      ...findingCounts()
     });
     if (robots.isAllowed(url, input.userAgent) === false) { excluded.push({ url, reason: 'Disallowed by robots.txt' }); return; }
     if (input.delayMs) await sleep(input.delayMs);
@@ -357,7 +369,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   };
 
   while (queue.length && (input.maxPages === null || fetched.size < input.maxPages)) {
-    while (control.isPaused() && !control.isCancelled()) { await onProgress({ phase: 'crawling', message: 'Crawl paused', fetched: fetched.size, analyzed: pages.length, queued: queue.length, percent: null }); await sleep(250); }
+    while (control.isPaused() && !control.isCancelled()) { await onProgress({ phase: 'crawling', message: 'Crawl paused', fetched: fetched.size, analyzed: pages.length, queued: queue.length, percent: null, ...findingCounts() }); await sleep(250); }
     if (control.isCancelled()) break;
     const remaining = input.maxPages === null ? queue.length : Math.min(queue.length, input.maxPages - fetched.size);
     const batch = queue.splice(0, Math.min(Math.max(1, input.concurrency), remaining));
@@ -387,7 +399,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
         let rules = externalRobots.get(targetOrigin);
         if (!rules) { rules = await loadRobots(targetOrigin, input.userAgent); externalRobots.set(targetOrigin, rules); }
         const allowed = rules.parser.isAllowed(item.url, input.userAgent) !== false;
-        await onProgress({ phase: 'external', message: `Checking external link ${item.url}`, fetched: fetched.size, analyzed: pages.length, queued: externalQueue.length, currentUrl: item.url, percent: null });
+        await onProgress({ phase: 'external', message: `Checking external link ${item.url}`, fetched: fetched.size, analyzed: pages.length, queued: externalQueue.length, currentUrl: item.url, percent: null, ...findingCounts() });
         if (!allowed) { externalPages.push({ url: item.url, finalUrl: item.url, depth: item.depth, status: null, contentType: '', responseTimeMs: null, redirectChain: [], sourcePages: [...item.sourcePages], robotsAllowed: false, error: 'Disallowed by external robots.txt' }); return; }
         try {
           const result = await fetchWithRedirects(item.url, input.userAgent);
@@ -405,7 +417,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   if (input.pageSpeed && !control.isCancelled()) {
     let pageSpeedRateLimited = false;
     for (const [index, page] of pages.entries()) {
-      await onProgress({ phase: 'pagespeed', message: `Running PageSpeed for ${page.url}`, fetched: fetched.size, analyzed: pages.length, queued: 0, currentUrl: page.url, percent: 92 + Math.round(((index + 1) / Math.max(1, pages.length)) * 5) });
+      await onProgress({ phase: 'pagespeed', message: `Running PageSpeed for ${page.url}`, fetched: fetched.size, analyzed: pages.length, queued: 0, currentUrl: page.url, percent: 92 + Math.round(((index + 1) / Math.max(1, pages.length)) * 5), ...findingCounts() });
       if (pageSpeedRateLimited) {
         page.pageSpeed = [{ strategy: 'mobile', performance: null, accessibility: null, bestPractices: null, seo: null, metrics: {}, fieldMetrics: {}, errorCode: 'skipped_after_rate_limit', error: 'Skipped because Google PageSpeed quota was exhausted earlier in this audit. Retry later or configure PAGESPEED_API_KEY with available quota.' }];
         continue;
@@ -424,7 +436,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   }
   const exhaustiveGraph = input.maxPages === null && !configuredExclusions.length && input.maxDepth === null;
   applyInternalGraphMetrics(pages, startUrl, exhaustiveGraph);
-  await onProgress({ phase: 'keywords', message: 'Scoring keyword targets and checking cannibalization', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98 });
+  await onProgress({ phase: 'keywords', message: 'Scoring keyword targets and checking cannibalization', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98, ...findingCounts() });
   const keywords = aggregateKeywords(pages, input.maxKeywords);
   const standardGscFiles = input.gscCsvFiles?.length ? input.gscCsvFiles : input.gscCsv ? [input.gscCsv] : [];
   const combinedGscFiles = [input.gscQueryPageCsv, ...standardGscFiles.filter(csv => /(?:^|,)\s*(?:page|top pages)\s*(?:,|$)/im.test(csv) && /(?:^|,)\s*(?:query|top queries)\s*(?:,|$)/im.test(csv))].filter((csv): csv is string => Boolean(csv));
@@ -489,6 +501,6 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length, gscAveragePosition, gscProperty: input.gscProperty, gscDateRange, ga4DateRange }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
   };
   await renderedBrowser?.close();
-  await onProgress({ phase: 'complete', message: 'Audit complete', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 100 });
+  await onProgress({ phase: 'analysis', message: 'Analysis complete; preparing report data', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98, ...findingCounts() });
   return report;
 }

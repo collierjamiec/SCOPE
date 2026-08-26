@@ -1,9 +1,12 @@
+import { normalizeDomain } from './util.js';
+
 type DatasetType = 'competitive_seo' | 'ai_visibility';
 type Row = Record<string, string>;
 
 const normalize = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 const numeric = (value = '') => { const cleaned = value.replace(/[%,$£€\s]/g, '').replaceAll(',', ''); if (!cleaned || cleaned === '-') return null; const parsed = Number(cleaned); return Number.isFinite(parsed) ? parsed : null; };
 const first = (row: Row, names: string[]) => names.map(name => row[normalize(name)]).find(value => value !== undefined && value !== '') ?? '';
+const candidateType = (domain: string) => /^(?:instagram|facebook|wikipedia|imdb|youtube|linkedin|x|twitter|reddit|pinterest|tiktok)\./i.test(domain) ? 'platform_or_reference' : 'market_candidate';
 
 function table(csv: string): string[][] {
   const rows: string[][] = []; let row: string[] = [], value = '', quoted = false;
@@ -36,21 +39,23 @@ export function parseIntelligenceCsv(csv: string, datasetType: DatasetType) {
       const trafficForecastIndex = rawHeaders.findIndex(header => /traffic forecast/i.test(header));
       const rawRows = data.slice(headerIndex + 1).filter(values => values[domainIndex] && !/^other competitors$|^total traffic forecast$/i.test(values[domainIndex].trim()));
       const normalized = rawRows.map(values => ({
-        domain: values[domainIndex].trim().replace(/^www\./i, '').toLowerCase(),
+        domain: normalizeDomain(values[domainIndex].trim()),
         top20Urls: numeric(values[top20UrlsIndex]),
         top20Keywords: numeric(values[top20KeywordsIndex]),
         shareOfVoice: numeric(values[shareOfVoiceIndex]),
-        trafficForecast: numeric(values[trafficForecastIndex])
+        trafficForecast: numeric(values[trafficForecastIndex]),
+        candidateType: candidateType(normalizeDomain(values[domainIndex].trim()))
       })).filter(row => /(?:^|\.)[a-z0-9-]+\.[a-z]{2,}$/i.test(row.domain));
       const preamble = data.slice(0, headerIndex).flat().join(' '), dates = (preamble.match(/\d{4}-\d{2}-\d{2}/g) ?? []).sort();
-      const sourceDomain = preamble.match(/(?:^|["\s])((?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+)/i)?.[1]?.replace(/^www\./i, '').toLowerCase() ?? null;
+      const sourceMatch = preamble.match(/(?:^|["\s])((?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+)/i)?.[1];
+      const sourceDomain = sourceMatch ? normalizeDomain(sourceMatch) : null;
       const source = normalized.find(row => row.domain === sourceDomain) ?? null;
       const competitors = normalized.filter(row => row.domain !== sourceDomain);
       return { rows: normalized, metrics: { datasetKind: 'share_of_voice', sourceDomain, competitorCount: competitors.length, competitors, sourceShareOfVoice: source?.shareOfVoice ?? null, sourceTop20Keywords: source?.top20Keywords ?? null, sourceTrafficForecast: source?.trafficForecast ?? null, reportStart: dates[0] ?? null, reportEnd: dates.at(-1) ?? null } };
     }
     const domainColumns = rawHeaders.map((header, index) => ({ header: header.trim(), key: headers[index] })).filter(column => /(?:^|\.)[a-z0-9-]+\.[a-z]{2,}$/i.test(column.header));
     if (domainColumns.length >= 2 && !headers.some(header => ['position','currentposition','rank'].includes(header))) {
-      const sourceColumn = rawHeaders.length - 1, sourceHeader = rawHeaders[sourceColumn].trim(), sourceKey = headers[sourceColumn], competitorColumns = domainColumns.filter(column => column.key !== sourceKey);
+      const sourceColumn = rawHeaders.length - 1, sourceHeader = rawHeaders[sourceColumn].trim(), sourceKey = headers[sourceColumn], competitorColumns = domainColumns.filter(column => column.key !== sourceKey).map(column => ({ ...column, header: normalizeDomain(column.header) }));
       const keywordRows = rows.filter(row => { const keyword = first(row, ['keyword','query','phrase']).toLowerCase(); return keyword && keyword !== 'general' && !/^google\b/.test(keyword); });
       const matrixRows = keywordRows.flatMap(row => {
         const keyword = first(row, ['keyword','query','phrase']), volume = numeric(first(row, ['volume','search volume','searchvolume','search vol'])), sourcePosition = numeric(row[sourceKey]);
@@ -58,7 +63,7 @@ export function parseIntelligenceCsv(csv: string, datasetType: DatasetType) {
       });
       const competitors = competitorColumns.map(column => {
         const relevant = matrixRows.filter(row => row.competitor === column.header), positioned = relevant.filter(row => row.competitorPosition !== null), shared = relevant.filter(row => row.relation === 'shared');
-        return { domain: column.header, rankingKeywords: positioned.length, top10Keywords: positioned.filter(row => row.competitorPosition! <= 10).length, averagePosition: positioned.length ? positioned.reduce((sum, row) => sum + row.competitorPosition!, 0) / positioned.length : null, sharedKeywords: shared.length, competitorOnlyKeywords: relevant.filter(row => row.relation === 'competitor_only').length, sourceOnlyKeywords: relevant.filter(row => row.relation === 'source_only').length, competitorWins: shared.filter(row => row.competitorPosition! < row.sourcePosition!).length, sourceWins: shared.filter(row => row.sourcePosition! < row.competitorPosition!).length };
+        return { domain: column.header, candidateType: candidateType(column.header), rankingKeywords: positioned.length, top10Keywords: positioned.filter(row => row.competitorPosition! <= 10).length, averagePosition: positioned.length ? positioned.reduce((sum, row) => sum + row.competitorPosition!, 0) / positioned.length : null, sharedKeywords: shared.length, competitorOnlyKeywords: relevant.filter(row => row.relation === 'competitor_only').length, sourceOnlyKeywords: relevant.filter(row => row.relation === 'source_only').length, competitorWins: shared.filter(row => row.competitorPosition! < row.sourcePosition!).length, sourceWins: shared.filter(row => row.sourcePosition! < row.competitorPosition!).length };
       });
       const dates = (data.slice(0, headerIndex).flat().join(' ').match(/\d{4}-\d{2}-\d{2}/g) ?? []).sort();
       return { rows: matrixRows, metrics: { datasetKind: 'competitor_position_matrix', keywordCount: keywordRows.length, competitorCount: competitors.length, sourceColumn: sourceHeader, competitors, reportStart: dates[0] ?? null, reportEnd: dates.at(-1) ?? null } };

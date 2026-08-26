@@ -38,12 +38,12 @@ test('parses SE Ranking history exports using the latest two dated columns', () 
 });
 
 test('parses SE Ranking competitor position matrices as modeled competitive evidence', () => {
-  const csv = 'qu_competitors_overall_2026-07-26--2026-08-26\nKeyword,"Search vol.",competitor.test,another.test,qu\n"Google USA",37100,99,98,79\nGeneral,11880,99,97,85\n"queer resilience",90,11,-,48\n"queer healing",40,8,22,18\n"queer community",100,26,9,-';
+  const csv = 'qu_competitors_overall_2026-07-26--2026-08-26\nKeyword,"Search vol.",www.competitor.test,another.test,qu\n"Google USA",37100,99,98,79\nGeneral,11880,99,97,85\n"queer resilience",90,11,-,48\n"queer healing",40,8,22,18\n"queer community",100,26,9,-';
   const result = parseIntelligenceCsv(csv, 'competitive_seo');
   assert.equal(result.metrics.datasetKind, 'competitor_position_matrix');
   assert.equal(result.metrics.keywordCount, 3);
   assert.equal(result.metrics.competitorCount, 2);
-  assert.deepEqual(result.metrics.competitors[0], { domain: 'competitor.test', rankingKeywords: 3, top10Keywords: 1, averagePosition: 15, sharedKeywords: 2, competitorOnlyKeywords: 1, sourceOnlyKeywords: 0, competitorWins: 2, sourceWins: 0 });
+  assert.deepEqual(result.metrics.competitors[0], { domain: 'competitor.test', candidateType: 'market_candidate', rankingKeywords: 3, top10Keywords: 1, averagePosition: 15, sharedKeywords: 2, competitorOnlyKeywords: 1, sourceOnlyKeywords: 0, competitorWins: 2, sourceWins: 0 });
 });
 
 test('parses SE Ranking Share of Voice exports and separates the source domain', () => {
@@ -53,5 +53,11 @@ test('parses SE Ranking Share of Voice exports and separates the source domain',
   assert.equal(result.metrics.sourceDomain, 'source.test');
   assert.equal(result.metrics.sourceShareOfVoice, 0.17);
   assert.equal(result.metrics.competitorCount, 1);
-  assert.deepEqual(result.metrics.competitors[0], { domain: 'competitor.test', top20Urls: 2, top20Keywords: 11, shareOfVoice: 17.46, trafficForecast: 3987.84 });
+  assert.deepEqual(result.metrics.competitors[0], { domain: 'competitor.test', top20Urls: 2, top20Keywords: 11, shareOfVoice: 17.46, trafficForecast: 3987.84, candidateType: 'market_candidate' });
+});
+
+test('labels broad platforms separately from market competitor candidates', () => {
+  const csv = '"source.test, Google USA, 2026-08-25 - 2026-08-26"\nDomain,"URLs in the Top 20",Dynamics,"Keywords in the Top 20",Dynamics,"Share of Voice",Dynamics,"Traffic forecast",Dynamics\nwww.instagram.com,2,0,11,1,17.46,-1.07,3987.84,-36.05\nsource.test,13,0,37,8,0.17,0.01,38.13,3.65';
+  const result = parseIntelligenceCsv(csv, 'competitive_seo');
+  assert.equal(result.metrics.competitors[0].candidateType, 'platform_or_reference');
 });

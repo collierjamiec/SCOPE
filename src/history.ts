@@ -6,6 +6,9 @@ import { PrismaClient, type ComparisonStatus, type DeltaState } from './generate
 import { diagnoseTrafficChange } from './trend-diagnostics.js';
 import { parseIntelligenceCsv } from './intelligence-imports.js';
 import type { AuditReport, Finding, PageResult } from './types.js';
+import { normalizeDomain } from './util.js';
+
+export { normalizeDomain } from './util.js';
 
 const RULESET_VERSION = '2026-08-25';
 let client: PrismaClient | undefined;
@@ -29,13 +32,6 @@ export async function historyStatus() {
 }
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const json = (value: unknown) => JSON.parse(JSON.stringify(value));
-
-export function normalizeDomain(value: string): string {
-  const url = new URL(value.includes('://') ? value : `https://${value}`);
-  let host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
-  if (url.port && !((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80'))) host += `:${url.port}`;
-  return host;
-}
 
 export async function listDomainCompetitors(sourceDomainId: string) {
   const definitions = await db().domainCompetitor.findMany({ where: { sourceDomainId }, orderBy: { normalizedDomain: 'asc' } });

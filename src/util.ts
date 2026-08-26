@@ -2,6 +2,14 @@ export function cleanText(value: string | undefined | null): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
+/** Canonical domain identity shared by history, competitive imports, and relationships. */
+export function normalizeDomain(value: string): string {
+  const url = new URL(value.includes('://') ? value : `https://${value}`);
+  let host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+  if (url.port && !((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80'))) host += `:${url.port}`;
+  return host;
+}
+
 export function normaliseUrl(input: string, base?: string): string | null {
   try {
     const url = new URL(input, base);
