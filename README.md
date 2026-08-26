@@ -48,7 +48,7 @@ npm run dashboard
 
 Open the displayed local URL, enter a starting page, and use the orange gear to configure the audit. The modal provides Quick Scan, SEO Audit, SEO + AIO, Full Audit, and custom configurations.
 
-**Full Audit** selects the entire eligible site, all audit modules, discovery of up to 5,000 keywords, and up to 100 licensed SERP checks. GSC and GA4 exports remain optional because they require user-provided data.
+**Full Audit** selects the entire eligible site, all audit modules, discovery of up to 5,000 keywords, and up to 100 licensed SERP checks. Direct GSC and GA4 connections and their CSV fallbacks remain optional because they require property-specific access or user-provided data.
 
 During a crawl, the dashboard shows live activity, URLs fetched, pages analyzed, Critical/Warning/Info findings accumulated so far, elapsed time, throughput, ETA, and the current URL. When fetching ends, the status changes to analysis and report-generation stages while SCOPE computes findings, writes the structured files, builds the PDF, and retains history, so the final processing interval is not mistaken for a frozen audit. Completed reports include priorities, pages, content, technical, AIO, keywords, GSC, GA4, images, and findings views.
 
@@ -162,9 +162,23 @@ If no `Filters.csv` is supplied, SCOPE explicitly reports that the reporting per
 
 GA4 reporting periods are read from native `Start date` / `End date` export metadata or a `Date` dimension when present. If the CSV omits both, enter the exact period beside the GA4 uploader. The dashboard, DOCX, and PDF explicitly disclose the date range and its source—or state that it is unavailable. GA4 landing-page reporting includes sessions, total users, engaged sessions, engagement rate, bounce rate, and key events, sorted by sessions descending in generated documents. The main dashboard summarizes total sessions and total users plus aggregate engagement and session-weighted bounce rate. Schema coverage is shown alongside these top-level health metrics; keyword and severity totals are summarized in Executive rather than consuming KPI cards.
 
-## Google Analytics 4 imports
+## Google Analytics 4 data
 
-For reliable engagement and bounce data, create a GA4 **Explore → Free form** exploration with **Landing page + query string** as the row dimension and Sessions, Total users, Engaged sessions, Engagement rate, Bounce rate, and Key events as metrics, then export CSV. The standard Landing page detail report is also accepted, but it may omit either rate. SCOPE preserves a missing metric as **Unavailable in export** instead of silently converting it to 0.0%. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows.
+### Direct GA4 Data API connection
+
+The dashboard now connects directly to the Google Analytics Data API using read-only OAuth. This is the preferred path because it retrieves the dated landing-page rows and property-level aggregate totals together, eliminating manual exports and avoiding an incorrect “Total users” KPI created by summing non-additive page-level user counts.
+
+Open **Settings → Connected data → Google Analytics 4 Data API**. Enable the Google Analytics Data API and Google Analytics Admin API in a Google Cloud project, configure the OAuth consent screen, create a **Desktop app** OAuth client, connect an account with access to the intended property, and select the property and dates. The installed client used for GSC can be reused, but GA4 still receives its own read-only authorization token.
+
+SCOPE requests **Landing page + query string** with Sessions, Total users, Engaged sessions, Engagement rate, Bounce rate, and Key events. It uses the page rows for URL drilldowns and Google’s aggregate totals for the headline GA4 KPIs. The property, exact dates, property time zone, privacy thresholding, high-cardinality data loss, and sampling indicators are retained in dashboard and downloadable-report provenance where available.
+
+Credentials are stored locally in `.scope/google-analytics.json` by default with owner-only permissions. Use `SCOPE_DATA_DIR` for an installation-specific application-data directory or `SCOPE_GOOGLE_ANALYTICS_CREDENTIALS_FILE` for an exact path. They never enter reports, history, logs, browser status payloads, or Git. The interface supports account switching, disconnecting while retaining the installed client, and complete local removal.
+
+The integration paginates high-cardinality reports, requests property quota state, and retries HTTP 429/500/503 responses with bounded backoff. `runReport` is implemented now; pivot, realtime, funnel, metadata-driven report building, and optional BigQuery event-level analysis remain documented extension points—not implied current features. See the [step-by-step GA4 Data API guide](docs/GA4-DATA-API.md).
+
+### CSV fallback
+
+For reliable engagement and bounce data without OAuth, create a GA4 **Explore → Free form** exploration with **Landing page + query string** as the row dimension and Sessions, Total users, Engaged sessions, Engagement rate, Bounce rate, and Key events as metrics, then export CSV. The standard Landing page detail report is also accepted, but it may omit either rate. SCOPE preserves a missing metric as **Unavailable in export** instead of silently converting it to 0.0%. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows. When both sources are selected, the direct API takes precedence for that audit.
 
 Use the same GSC and GA4 period when possible. Uploaded CSV contents are processed locally and omitted from persisted audit configuration.
 
@@ -306,13 +320,13 @@ Use the dedicated **Competitive intelligence** dashboard to define competitor do
 
 Competitive intelligence now has its own `/competitive` dashboard, while crawl history remains at `/trends`. Competitor baseline launches inherit the source domain's latest crawl and audit settings but intentionally exclude source-domain GSC and GA4 data. Provider CSV imports retain provider, target, market, reporting period, original filename, normalized metrics, and rows.
 
-The reviewed technical-parity, content-authority, CRO, AI-visibility, and competitive-measurement backlog is maintained in [the SCOPE expansion roadmap](docs/EXPANSION-ROADMAP.md). It includes evidence boundaries and delivery sequencing so provider checklists do not overwhelm higher-value business diagnostics.
+The reviewed technical-parity, content-authority, CRO, AI-visibility, and competitive-measurement backlog is maintained in [the SCOPE expansion roadmap](docs/EXPANSION-ROADMAP.md). The companion [SE Ranking website-audit gap analysis](docs/SE-RANKING-AUDIT-GAP-ANALYSIS.md) documents the PATLive and Queer & Unbroken comparison, crawl-coverage limitations, parity matrix, and implementation priorities. These references keep provider checklists from overwhelming higher-value business diagnostics.
 
 AIO/AEO/GEO intelligence has its own `/ai-intelligence` dashboard. It separates SCOPE answer-readiness signals from externally observed prompts, mentions, citations, platforms/models, sentiment, and provider visibility/share-of-voice exports. The optional SE Ranking API connection imports the configured AI Results Tracker prompt set and engines and can retrieve bounded answer/source/brand evidence. The prompt table identifies configured competitor appearances and produces a rule-based “likely why” hypothesis with a disclosed confidence legend and a specific verification step. These hypotheses do not claim access to a model's hidden ranking factors. Third-party methodologies are not assumed to be interchangeable or equivalent to Google first-party data.
 
 The crawl-side advanced evidence model follows a human-first constraint. It rewards concise answer passages, definitions, comparison structure, attributed expertise, supported numbers, source provenance, current volatile facts, explanatory visual context, and consistent entities only when they improve the reader's experience. It does not recommend robotic prose, unsupported numerical precision, invented sources, or structured data unsupported by visible content. `Claim` and `Dataset` are valid Schema.org types in appropriate contexts; `citation` is a CreativeWork property. Their presence does not guarantee a Google rich result or an AI citation.
 
-For feature-by-feature GUI instructions and evidence interpretation, see the [nontechnical user guide](docs/USER-GUIDE.md). For prompt strategy, confidence rules, API behavior, and AI evidence definitions, see [AI intelligence and SE Ranking setup](docs/AI-INTELLIGENCE.md).
+For feature-by-feature GUI instructions and evidence interpretation, see the [nontechnical user guide](docs/USER-GUIDE.md). For direct analytics setup and recovery, see [Connect Google Analytics 4 directly](docs/GA4-DATA-API.md). For prompt strategy, confidence rules, API behavior, and AI evidence definitions, see [AI intelligence and SE Ranking setup](docs/AI-INTELLIGENCE.md).
 
 ## License
 

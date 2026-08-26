@@ -532,7 +532,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
       blockedInternallyLinkedPages, parameterDuplicateUrls: [...parameterBuckets.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0) },
     sitemaps: sitemapInfo.results,
     redirects, brokenLinks, externalPages,
-    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length, gscAveragePosition, gscProperty: input.gscProperty, gscDateRange, ga4DateRange }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
+    pages, excludedPages: excluded, keywords, cannibalization, aiCrawlerAccess, importedData: { gscRows, ga4Rows, gscKeywords: keywords.filter(keyword => keyword.searchConsole).length, ga4MatchedPages: pages.filter(page => page.analytics).length, gscAveragePosition, gscProperty: input.gscProperty, gscDateRange, ga4DateRange, ga4Property: input.ga4Property, ga4Totals: input.ga4TotalsOverride, ga4DataQuality: input.ga4DataQualityOverride }, priorities: buildPriorities(pages), generatedAt: new Date().toISOString(), partial: control.isCancelled()
   };
   await renderedBrowser?.close();
   await onProgress({ phase: 'analysis', message: 'Analysis complete; preparing report data', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98, ...findingCounts() });

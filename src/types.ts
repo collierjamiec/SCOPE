@@ -25,7 +25,10 @@ export interface AuditConfig {
   gscDateRangeOverride?: { start: string; end: string; label: string; source: 'Google Search Console API' };
   gscProperty?: string;
   ga4Csv?: string;
-  ga4DateRangeOverride?: { start: string; end: string; label: string; source: 'User-entered for GA4 CSV' };
+  ga4DateRangeOverride?: { start: string; end: string; label: string; source: 'User-entered for GA4 CSV' | 'Google Analytics Data API' };
+  ga4Property?: string;
+  ga4TotalsOverride?: { sessions: number; totalUsers: number; engagedSessions: number; engagementRate: number | null; bounceRate: number | null; keyEvents: number };
+  ga4DataQualityOverride?: { timeZone?: string; currencyCode?: string; subjectToThresholding: boolean; dataLossFromOtherRow: boolean; sampled: boolean };
   /** Safety controls for unlimited and highly faceted sites. */
   maxDepth?: number | null;
   maxUrlsPerPath?: number;
@@ -280,7 +283,7 @@ export interface AuditReport {
   keywords: KeywordCandidate[];
   cannibalization: CannibalizationIssue[];
   aiCrawlerAccess: Array<{ crawler: string; allowed: boolean; note: string }>;
-  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number; gscAveragePosition?: number; gscProperty?: string; gscDateRange?: { start?: string; end?: string; label: string; source: 'Filters export' | 'Date dimension export' | 'Google Search Console API' }; ga4DateRange?: { start?: string; end?: string; label: string; source: 'GA4 export metadata' | 'GA4 date dimension' | 'User-entered for GA4 CSV' } };
+  importedData: { gscRows: number; ga4Rows: number; gscKeywords: number; ga4MatchedPages: number; gscAveragePosition?: number; gscProperty?: string; gscDateRange?: { start?: string; end?: string; label: string; source: 'Filters export' | 'Date dimension export' | 'Google Search Console API' }; ga4DateRange?: { start?: string; end?: string; label: string; source: 'GA4 export metadata' | 'GA4 date dimension' | 'User-entered for GA4 CSV' | 'Google Analytics Data API' }; ga4Property?: string; ga4Totals?: { sessions: number; totalUsers: number; engagedSessions: number; engagementRate: number | null; bounceRate: number | null; keyEvents: number }; ga4DataQuality?: { timeZone?: string; currencyCode?: string; subjectToThresholding: boolean; dataLossFromOtherRow: boolean; sampled: boolean } };
   priorities: Array<{ rank: number; area: string; issue: string; impact: 'high' | 'medium' | 'low'; effort: 'low' | 'medium' | 'high'; affectedPages: number; affectedUrls: string[]; recommendation: string }>;
   generatedAt: string;
   partial?: boolean;

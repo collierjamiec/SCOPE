@@ -12,6 +12,12 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Added a direct, read-only Google Analytics Data API OAuth connection with locally stored owner-only credentials, optional reuse of the installed GSC OAuth client, GA4 account/property discovery, account switching, disconnect/removal controls, and CSV fallback.
+- Added resilient GA4 `runReport` landing-page retrieval with pagination, 429/500/503 retry and `Retry-After` handling, property quota capture, exact property-level sessions/Total users/engagement/bounce/key-event totals, and source/date/property/time-zone/thresholding/high-cardinality/sampling provenance in dashboards, history, DOCX, and PDF.
+- Added a fixed viewport connectivity strip for MariaDB, GA4, GSC, PageSpeed Insights, and SE Ranking with green/yellow/red states and viewport-safe accessible tooltips; imported CSV evidence remains distinct from a live API connection.
+- Restored the SCOPE crosshairs logo to the historical Trends header and kept the service connectivity strip outside the report canvas.
+- Added a complete SE Ranking audit gap analysis for the supplied PATLive and Queer & Unbroken PDFs, including crawl-cap caveats, technical parity priorities, provider-only metrics, root-cause grouping requirements, and reporting patterns SCOPE should deliberately avoid.
+- Added a complete nontechnical GA4 Data API setup, recovery, quota, interpretation, CSV fallback, and future-BigQuery guide, plus synchronized README, user-guide, and security documentation.
 - Added an optional, locally stored SE Ranking API connection for AI Results Tracker projects, engines, prompts, rankings, mentions, citations, and bounded answer/source/brand evidence; CSV imports remain available and credit-metered Data API calls are never made implicitly.
 - Added prompt-planning onboarding covering brand aliases, competitor roles, market/language, engine comparability, stable prompt portfolios, funnel/question families, and measurement-change disclosure.
 - Added competitor appearances to AI prompt observations plus rule-based “likely why” hypotheses, next-verification guidance, and a transparent low/moderate/high confidence legend that does not claim access to hidden model-ranking factors.

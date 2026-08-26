@@ -1,5 +1,11 @@
 # SCOPE expansion roadmap
 
+## Implemented integration foundation
+
+Google first-party integrations now follow one local OAuth pattern: read-only GSC and GA4 Data API connections use separate scope-specific refresh tokens, permission-restricted files under the configurable SCOPE data directory, property/account switching, explicit reporting periods, and CSV fallbacks. GA4 `runReport` provides the initial landing-page and aggregate KPI surface; metadata-driven custom reports, realtime, pivot, funnel, and optional BigQuery event-level analysis remain staged extensions rather than implied current functionality.
+
+The provider boundary is intentionally reusable: first-party Google observations, directly observed crawl facts, and third-party modeled/monitoring data retain separate authority labels, periods, configuration fingerprints, and quality caveats. New providers should implement the same API-first/CSV-fallback credential and provenance contract rather than coupling audit logic to one vendor response shape.
+
 This document records the product and measurement direction for SCOPE after reviewing the August 26, 2026 SE Ranking website-audit exports for `patlive.com` and `queerandunbroken.com`, the CRO planning notes, and the content-authority and competitive-analysis brief.
 
 ## Product direction

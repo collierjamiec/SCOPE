@@ -34,7 +34,11 @@ CSV fallback accepts the normal `Queries.csv`, `Pages.csv`, and `Filters.csv` ex
 
 ### Google Analytics 4
 
-For the most complete landing-page table, use **Explore → Free form** with **Landing page + query string** as the row dimension and Sessions, Total users, Engaged sessions, Engagement rate, Bounce rate, and Key events as metrics. Export CSV. A standard Landing page export is accepted but may omit a rate; omitted fields remain “Unavailable,” never zero.
+Use the read-only direct connection when possible. Open **Settings → Connected data → Google Analytics 4 Data API**. Enable the Google Analytics Data API and Google Analytics Admin API in the same Google Cloud project used by the installed OAuth client, connect a Google account that can view the intended GA4 property, then choose the property and dates. You may reuse the installed GSC OAuth client, but Google still asks for separate GA4 read-only consent.
+
+Direct API data is preferred because it supplies page rows and exact property-level totals. The **Total users** KPI therefore uses Google’s aggregate distinct-user total instead of adding non-additive users across landing pages. Hover or focus its information icon to see the property, reporting dates, time zone, and available quality caveats.
+
+For CSV fallback, use **Explore → Free form** with **Landing page + query string** as the row dimension and Sessions, Total users, Engaged sessions, Engagement rate, Bounce rate, and Key events as metrics. Export CSV. A standard Landing page export is accepted but may omit a rate; omitted fields remain “Unavailable,” never zero. When both are selected, direct API data takes precedence for that audit. See [Connect Google Analytics 4 directly](GA4-DATA-API.md) for nontechnical setup, account switching, quota guidance, and troubleshooting.
 
 ## Add provider data
 
@@ -53,7 +57,7 @@ Always select the provider, target, market, and exact dates. Provider traffic, r
 - **AIO:** answer-readiness dimensions, advanced evidence, and exact opportunities.
 - **Findings:** Critical, Warning, and Info in that default order with filters and definitions.
 
-Use the information icon on KPI cards to see the metric's source, reporting dates, denominator, or limitation. Tooltips remain inside the viewport and are accessible by hover, focus, and keyboard.
+Use the information icon on KPI cards to see the metric's source, reporting dates, denominator, or limitation. Tooltips remain inside the viewport and are accessible by hover, focus, and keyboard. The fixed bottom-right connectivity strip shows database, GA4, GSC, PageSpeed Insights, and SE Ranking status without entering the report canvas. Green means connected/ready, yellow means optional setup or connection is incomplete, and red means the status check failed or the service is unavailable. A CSV import counts as imported evidence for a report; it does not turn an API icon green.
 
 ## Severity
 
@@ -83,7 +87,7 @@ SCOPE does not email reports. Download and send them through your preferred serv
 
 ## Credentials and privacy
 
-Google OAuth, PageSpeed, and SE Ranking credentials can be stored locally with owner-only file permissions. They are never embedded in reports, MariaDB history, or Git. Each connection can be removed or replaced from the interface. Uploaded CSVs are processed locally; protect them and the generated reports as client/business data.
+GSC OAuth, GA4 OAuth, PageSpeed, and SE Ranking credentials can be stored locally with owner-only file permissions. GSC and GA4 use separate refresh tokens because they request different read-only scopes, even when they reuse one installed Google OAuth client. Secrets are never embedded in reports, MariaDB history, browser status responses, logs, or Git. Each connection can be disconnected, removed, or replaced from the interface. Uploaded CSVs are processed locally; protect them and the generated reports as client/business data.
 
 ## Interpretation principles
 
@@ -92,4 +96,3 @@ Google OAuth, PageSpeed, and SE Ranking credentials can be stored locally with o
 - Provider data is methodology-dependent and may disagree with Google or another provider.
 - Inferred keywords and “likely why” explanations are hypotheses with disclosed confidence, not rankings or causal proof.
 - Human usefulness comes before satisfying a checklist. Never add unsupported numbers, fake expertise, irrelevant FAQ blocks, or schema that the visible page cannot support.
-
