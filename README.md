@@ -269,6 +269,12 @@ The adapter receives `imageUrl`, `pageUrl`, `pageTitle`, `primaryKeywords`, and 
 - Keyword targeting, CTA selection, schema suggestions, cannibalization, GEO, and AIO findings are evidence-based heuristics requiring professional review.
 - See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CHANGELOG.md](CHANGELOG.md).
 
+## Competitor and historical intelligence
+
+The Trends dashboard includes source/date tooltips, an evidence-bounded traffic-change diagnosis, recurring-issue quick wins, and a historical executive summary. It distinguishes ranking loss, CTR loss, analytics divergence, and possible demand decline without claiming seasonality, algorithm changes, or competitor activity without evidence.
+
+Use **Trends → Competitors** to define competitor domains and launch a public SCOPE crawl against them. Directly observed crawl measurements, first-party GSC/GA4 measurements, and optional third-party modeled estimates are separate evidence classes. Competitor sessions, users, and traffic must be labeled as estimates and are never blended with first-party GA4 totals.
+
 ## License
 
 SCOPE is proprietary. No permission is granted to use, copy, modify, merge, publish, distribute, sublicense, or sell the software without prior written permission from Jamie C. Collier. See [LICENSE](LICENSE).

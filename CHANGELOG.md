@@ -6,6 +6,10 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Added historical traffic diagnostics and an executive summary covering direction, evidence, recurring issues, quick wins, and deeper SEO/AIO business guidance.
+- Added competitor-domain configuration, audit launching, and audited-history status while keeping public crawl observations, first-party analytics, and modeled traffic estimates distinct.
+- Retained GSC and GA4 traffic measurements at run and page level for longitudinal comparisons.
+
 - Added full read-only historical audit dashboards, retained report JSON retrieval, original DOCX/PDF downloads, audit-date disclaimers, and an Open full report action for every stored run.
 - Replaced the Trends domain dropdown and merge dropdown with separate searchable table modals showing audit counts, latest audit dates, and latest page counts.
 - Refined main dashboard KPIs to show schema coverage, aggregate engagement rate, session-weighted bounce rate, sessions, and total users; moved keyword and severity totals into the Executive Summary.

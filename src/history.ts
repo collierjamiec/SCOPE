@@ -3,6 +3,7 @@ import { readFile, readdir, rename, rm, rmdir, stat } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient, type ComparisonStatus, type DeltaState } from './generated/prisma/client.js';
+import { diagnoseTrafficChange } from './trend-diagnostics.js';
 import type { AuditReport, Finding, PageResult } from './types.js';
 
 const RULESET_VERSION = '2026-08-25';
@@ -33,6 +34,33 @@ export function normalizeDomain(value: string): string {
   let host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
   if (url.port && !((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80'))) host += `:${url.port}`;
   return host;
+}
+
+export async function listDomainCompetitors(sourceDomainId: string) {
+  const definitions = await db().domainCompetitor.findMany({ where: { sourceDomainId }, orderBy: { normalizedDomain: 'asc' } });
+  const audited = await db().domain.findMany({
+    where: { normalizedDomain: { in: definitions.map(item => item.normalizedDomain) } },
+    select: { id: true, normalizedDomain: true, _count: { select: { runs: true } }, runs: { orderBy: { generatedAt: 'desc' }, take: 1, select: { generatedAt: true, pageCount: true } } }
+  });
+  const byDomain = new Map(audited.map(item => [item.normalizedDomain, item]));
+  return definitions.map(item => ({ ...item, auditedDomain: byDomain.get(item.normalizedDomain) ?? null, evidenceClass: 'configured_competitor' }));
+}
+
+export async function addDomainCompetitor(sourceDomainId: string, value: string) {
+  const normalizedDomain = normalizeDomain(value);
+  const source = await db().domain.findUnique({ where: { id: sourceDomainId } });
+  if (!source) throw new Error('Source domain history was not found.');
+  if (source.normalizedDomain === normalizedDomain) throw new Error('A domain cannot be its own competitor.');
+  return db().domainCompetitor.upsert({
+    where: { sourceDomainId_normalizedDomain: { sourceDomainId, normalizedDomain } },
+    create: { sourceDomainId, normalizedDomain, displayDomain: normalizedDomain },
+    update: { displayDomain: normalizedDomain }
+  });
+}
+
+export async function removeDomainCompetitor(sourceDomainId: string, competitorId: string) {
+  const result = await db().domainCompetitor.deleteMany({ where: { id: competitorId, sourceDomainId } });
+  if (!result.count) throw new Error('Competitor definition was not found.');
 }
 
 export function normalizePageUrl(value: string): string {
@@ -67,6 +95,19 @@ const averageMetric = (report: AuditReport, key: string, field = false) => {
 };
 const date = (value?: string) => value ? new Date(`${value}T00:00:00.000Z`) : null;
 const schemaAppropriate = (page: PageResult) => page.schemas.some(schema => schema.validJson && schema.types.some(type => !['Organization', 'WebSite', 'BreadcrumbList', 'SiteNavigationElement', 'ImageObject'].includes(type)));
+const trafficTotals = (report: AuditReport) => {
+  const observed = report.keywords.filter(keyword => keyword.searchConsole), gscClicks = observed.reduce((sum, keyword) => sum + keyword.searchConsole!.clicks, 0), gscImpressions = observed.reduce((sum, keyword) => sum + keyword.searchConsole!.impressions, 0);
+  const analytics = report.pages.flatMap(page => page.analytics ? [page.analytics] : []), ga4Sessions = analytics.reduce((sum, item) => sum + item.sessions, 0), ga4Users = analytics.reduce((sum, item) => sum + item.activeUsers, 0), engaged = analytics.reduce((sum, item) => sum + item.engagedSessions, 0), bounceRows = analytics.filter(item => item.bounceRate != null), bounceSessions = bounceRows.reduce((sum, item) => sum + item.sessions, 0);
+  return { gscClicks: observed.length ? gscClicks : null, gscImpressions: observed.length ? gscImpressions : null, gscCtr: gscImpressions ? gscClicks / gscImpressions : null, gscKeywordCount: observed.length || null, ga4Sessions: analytics.length ? ga4Sessions : null, ga4Users: analytics.length ? ga4Users : null, ga4EngagementRate: ga4Sessions ? engaged / ga4Sessions : null, ga4BounceRate: bounceSessions ? bounceRows.reduce((sum, item) => sum + item.bounceRate! * item.sessions, 0) / bounceSessions : null };
+};
+const pageTraffic = (report: AuditReport) => {
+  const values = new Map<string, { clicks: number; impressions: number; weightedPosition: number }>();
+  for (const keyword of report.keywords) for (const [url, metric] of Object.entries(keyword.searchConsole?.pageMetrics ?? {})) {
+    const key = normalizePageUrl(url), current = values.get(key) ?? { clicks: 0, impressions: 0, weightedPosition: 0 };
+    current.clicks += metric.clicks; current.impressions += metric.impressions; current.weightedPosition += metric.position * metric.impressions; values.set(key, current);
+  }
+  return values;
+};
 
 function comparison(previous: { configFingerprint: string; rulesetVersion: string } | null, currentFingerprint: string): { status: ComparisonStatus; notes: string | null } {
   if (!previous) return { status: 'BASELINE', notes: 'First retained run for this domain.' };
@@ -92,11 +133,12 @@ export async function persistAuditRun(runId: string, report: AuditReport, output
     for (const item of currentSet) deltas.push({ fingerprint: item, state: previousSet.has(item) ? 'PERSISTING' : earlierSet.has(item) ? 'REOPENED' : 'OPENED' });
     for (const item of previousSet) if (!currentSet.has(item)) deltas.push({ fingerprint: item, state: 'RESOLVED' });
   }
+  const traffic = trafficTotals(report), perPageTraffic = pageTraffic(report);
   await prisma.$transaction(async tx => {
     await tx.auditRun.create({ data: {
-      id: runId, domainId: domain.id, rawStartUrl: report.config.startUrl, normalizedDomain: normalized, generatedAt: new Date(report.generatedAt), status: report.partial ? 'PARTIAL' : 'COMPLETE', scanType: scanType(report), configFingerprint: fingerprint, rulesetVersion: RULESET_VERSION, configJson: json(persistedConfig(report)), outputDirectory, reportJsonPath: resolve(outputDirectory, 'report.json'), pageCount: report.summary.indexablePagesAnalyzed, fetchedCount: report.summary.pagesFetched, sitemapUrlCount: report.summary.sitemapPageUrls, criticalCount: countSeverity(report, 'critical'), warningCount: countSeverity(report, 'warning'), infoCount: countSeverity(report, 'info'), orphanPageCount: report.summary.orphanPages ?? 0, averageClickDepth: report.summary.averageClickDepth ?? null, staleContentCount: report.pages.filter(page => (page.contentAgeDays ?? 0) > 730).length, nearDuplicateGroups: report.summary.nearDuplicateGroups ?? 0, headingViolations: report.summary.headingHierarchyViolations ?? 0, mixedContentPages: report.summary.mixedContentPages ?? 0, canonicalSelfRate: report.summary.canonicalSelfReferencePercent ?? null, canonicalChains: report.summary.canonicalChains ?? 0, canonicalNon200: report.summary.canonicalNon200Targets ?? 0, crawlWasteUrls: (report.summary.blockedInternallyLinkedPages ?? 0) + (report.summary.parameterDuplicateUrls ?? 0), schemaCoverage: report.summary.schemaCoveragePercent ?? null, indexableRate: report.summary.crawlableIndexableRate ?? null, gscAveragePosition: report.importedData.gscAveragePosition ?? null, gscPeriodStart: date(report.importedData.gscDateRange?.start), gscPeriodEnd: date(report.importedData.gscDateRange?.end), ga4PeriodStart: date(report.importedData.ga4DateRange?.start), ga4PeriodEnd: date(report.importedData.ga4DateRange?.end), averageLcp: averageMetric(report, 'lcp'), averageCls: averageMetric(report, 'cls'), averageInp: averageMetric(report, 'inp', true), averageTbt: averageMetric(report, 'tbt'), previousRunId: previous?.id, comparisonStatus: comparable.status, comparisonNotes: comparable.notes,
+      id: runId, domainId: domain.id, rawStartUrl: report.config.startUrl, normalizedDomain: normalized, generatedAt: new Date(report.generatedAt), status: report.partial ? 'PARTIAL' : 'COMPLETE', scanType: scanType(report), configFingerprint: fingerprint, rulesetVersion: RULESET_VERSION, configJson: json(persistedConfig(report)), outputDirectory, reportJsonPath: resolve(outputDirectory, 'report.json'), pageCount: report.summary.indexablePagesAnalyzed, fetchedCount: report.summary.pagesFetched, sitemapUrlCount: report.summary.sitemapPageUrls, criticalCount: countSeverity(report, 'critical'), warningCount: countSeverity(report, 'warning'), infoCount: countSeverity(report, 'info'), orphanPageCount: report.summary.orphanPages ?? 0, averageClickDepth: report.summary.averageClickDepth ?? null, staleContentCount: report.pages.filter(page => (page.contentAgeDays ?? 0) > 730).length, nearDuplicateGroups: report.summary.nearDuplicateGroups ?? 0, headingViolations: report.summary.headingHierarchyViolations ?? 0, mixedContentPages: report.summary.mixedContentPages ?? 0, canonicalSelfRate: report.summary.canonicalSelfReferencePercent ?? null, canonicalChains: report.summary.canonicalChains ?? 0, canonicalNon200: report.summary.canonicalNon200Targets ?? 0, crawlWasteUrls: (report.summary.blockedInternallyLinkedPages ?? 0) + (report.summary.parameterDuplicateUrls ?? 0), schemaCoverage: report.summary.schemaCoveragePercent ?? null, indexableRate: report.summary.crawlableIndexableRate ?? null, gscAveragePosition: report.importedData.gscAveragePosition ?? null, ...traffic, gscPeriodStart: date(report.importedData.gscDateRange?.start), gscPeriodEnd: date(report.importedData.gscDateRange?.end), ga4PeriodStart: date(report.importedData.ga4DateRange?.start), ga4PeriodEnd: date(report.importedData.ga4DateRange?.end), averageLcp: averageMetric(report, 'lcp'), averageCls: averageMetric(report, 'cls'), averageInp: averageMetric(report, 'inp', true), averageTbt: averageMetric(report, 'tbt'), previousRunId: previous?.id, comparisonStatus: comparable.status, comparisonNotes: comparable.notes,
       findings: { create: currentFindings.map(item => ({ ...item, evidenceJson: item.evidenceJson ? json(item.evidenceJson) : undefined })) },
-      pageMetrics: { create: report.pages.map(page => ({ normalizedPageUrl: normalizePageUrl(page.url), pageType: page.pageType, status: page.status, indexable: page.indexable, incomingInternalLinks: page.incomingInternalLinks, clickDepth: page.clickDepth ?? null, orphan: Boolean(page.orphan), schemaEligible: true, schemaAppropriate: schemaAppropriate(page), contentAgeDays: page.contentAgeDays ?? null, lcp: page.pageSpeed[0]?.metrics.lcp ?? null, cls: page.pageSpeed[0]?.metrics.cls ?? null, inp: page.pageSpeed[0]?.fieldMetrics?.inp?.percentile ?? null, tbt: page.pageSpeed[0]?.metrics.tbt ?? null })) },
+      pageMetrics: { create: report.pages.map(page => { const gsc = perPageTraffic.get(normalizePageUrl(page.url)); return { normalizedPageUrl: normalizePageUrl(page.url), pageType: page.pageType, status: page.status, indexable: page.indexable, incomingInternalLinks: page.incomingInternalLinks, clickDepth: page.clickDepth ?? null, orphan: Boolean(page.orphan), schemaEligible: true, schemaAppropriate: schemaAppropriate(page), contentAgeDays: page.contentAgeDays ?? null, gscClicks: gsc?.clicks ?? null, gscImpressions: gsc?.impressions ?? null, gscCtr: gsc?.impressions ? gsc.clicks / gsc.impressions : null, gscPosition: gsc?.impressions ? gsc.weightedPosition / gsc.impressions : null, ga4Sessions: page.analytics?.sessions ?? null, ga4Users: page.analytics?.activeUsers ?? null, ga4EngagementRate: page.analytics?.engagementRate ?? null, ga4BounceRate: page.analytics?.bounceRate ?? null, lcp: page.pageSpeed[0]?.metrics.lcp ?? null, cls: page.pageSpeed[0]?.metrics.cls ?? null, inp: page.pageSpeed[0]?.fieldMetrics?.inp?.percentile ?? null, tbt: page.pageSpeed[0]?.metrics.tbt ?? null }; }) },
       deltas: previous ? { create: deltas.map(item => ({ ...item, previousRunId: previous.id })) } : undefined
     } });
   });
@@ -108,7 +150,24 @@ export async function listTrendDomains() {
 }
 export async function getDomainTrend(domainId: string) {
   if (!historyEnabled()) return null;
-  return db().domain.findUnique({ where: { id: domainId }, include: { aliases: { select: { normalizedDomain: true, rawDomain: true, createdAt: true } }, runs: { orderBy: { generatedAt: 'asc' }, select: { id: true, rawStartUrl: true, generatedAt: true, status: true, scanType: true, pageCount: true, fetchedCount: true, sitemapUrlCount: true, criticalCount: true, warningCount: true, infoCount: true, orphanPageCount: true, averageClickDepth: true, staleContentCount: true, nearDuplicateGroups: true, headingViolations: true, mixedContentPages: true, canonicalSelfRate: true, canonicalChains: true, canonicalNon200: true, crawlWasteUrls: true, schemaCoverage: true, indexableRate: true, gscAveragePosition: true, gscPeriodStart: true, gscPeriodEnd: true, ga4PeriodStart: true, ga4PeriodEnd: true, averageLcp: true, averageCls: true, averageInp: true, averageTbt: true, previousRunId: true, comparisonStatus: true, comparisonNotes: true, deltas: { select: { fingerprint: true, state: true } } } }, sourceMerges: { select: { id: true, sourceDomainId: true, targetDomainId: true, performedAt: true, performedBy: true, reason: true } }, targetMerges: { select: { id: true, sourceDomainId: true, targetDomainId: true, performedAt: true, performedBy: true, reason: true } } } });
+  const domain = await db().domain.findUnique({ where: { id: domainId }, include: { aliases: { select: { normalizedDomain: true, rawDomain: true, createdAt: true } }, runs: { orderBy: { generatedAt: 'asc' }, select: { id: true, rawStartUrl: true, generatedAt: true, status: true, scanType: true, pageCount: true, fetchedCount: true, sitemapUrlCount: true, criticalCount: true, warningCount: true, infoCount: true, orphanPageCount: true, averageClickDepth: true, staleContentCount: true, nearDuplicateGroups: true, headingViolations: true, mixedContentPages: true, canonicalSelfRate: true, canonicalChains: true, canonicalNon200: true, crawlWasteUrls: true, schemaCoverage: true, indexableRate: true, gscAveragePosition: true, gscClicks: true, gscImpressions: true, gscCtr: true, gscKeywordCount: true, gscPeriodStart: true, gscPeriodEnd: true, ga4Sessions: true, ga4Users: true, ga4EngagementRate: true, ga4BounceRate: true, ga4PeriodStart: true, ga4PeriodEnd: true, averageLcp: true, averageCls: true, averageInp: true, averageTbt: true, previousRunId: true, comparisonStatus: true, comparisonNotes: true, reportJsonPath: true, deltas: { select: { fingerprint: true, state: true } } } }, sourceMerges: { select: { id: true, sourceDomainId: true, targetDomainId: true, performedAt: true, performedBy: true, reason: true } }, targetMerges: { select: { id: true, sourceDomainId: true, targetDomainId: true, performedAt: true, performedBy: true, reason: true } } } });
+  if (!domain) return null;
+  const runs = await Promise.all(domain.runs.map(async run => {
+    let totals = { gscClicks: run.gscClicks, gscImpressions: run.gscImpressions, gscCtr: run.gscCtr, gscKeywordCount: run.gscKeywordCount, ga4Sessions: run.ga4Sessions, ga4Users: run.ga4Users, ga4EngagementRate: run.ga4EngagementRate, ga4BounceRate: run.ga4BounceRate };
+    if (run.reportJsonPath && (totals.gscClicks == null || totals.ga4Sessions == null)) try { totals = { ...totals, ...trafficTotals(JSON.parse(await readFile(run.reportJsonPath, 'utf8')) as AuditReport) }; } catch { /* Retain stored metrics when a legacy artifact is unavailable. */ }
+    const { reportJsonPath: _reportJsonPath, ...safeRun } = run;
+    return { ...safeRun, ...totals };
+  }));
+  const trafficDiagnosis = diagnoseTrafficChange(runs.at(-2), runs.at(-1));
+  const allFindings = await db().runFinding.findMany({ where: { run: { domainId } }, select: { ruleId: true, normalizedPageUrl: true, category: true, severity: true, message: true, runId: true, run: { select: { generatedAt: true } } } });
+  const latestRunId = runs.at(-1)?.id, latestRules = new Set(allFindings.filter(item => item.runId === latestRunId).map(item => item.ruleId)), grouped = new Map<string, typeof allFindings>();
+  for (const finding of allFindings) if (latestRules.has(finding.ruleId)) grouped.set(finding.ruleId, [...(grouped.get(finding.ruleId) ?? []), finding]);
+  const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+  const persistentIssues = [...grouped.entries()].map(([ruleId, items]) => {
+    const current = items.filter(item => item.runId === latestRunId), runIds = new Set(items.map(item => item.runId)), firstSeen = items.reduce((earliest, item) => item.run.generatedAt < earliest ? item.run.generatedAt : earliest, items[0].run.generatedAt);
+    return { ruleId, category: current[0]?.category ?? items[0].category, severity: current[0]?.severity ?? items[0].severity, message: current[0]?.message ?? items[0].message, affectedPages: new Set(current.map(item => item.normalizedPageUrl)).size, observedRuns: runIds.size, firstSeen, latestSeen: runs.at(-1)?.generatedAt };
+  }).filter(issue => issue.observedRuns >= 2).sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9) || b.observedRuns - a.observedRuns || b.affectedPages - a.affectedPages).slice(0, 20);
+  return { ...domain, runs, trafficDiagnosis, persistentIssues };
 }
 export async function locateHistoricalRun(runId: string) {
   if (!historyEnabled()) return null;

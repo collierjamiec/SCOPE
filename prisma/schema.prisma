@@ -34,6 +34,18 @@ model Domain {
   aliases          DomainAlias[]
   sourceMerges     DomainMerge[] @relation("MergeSource")
   targetMerges     DomainMerge[] @relation("MergeTarget")
+  competitors      DomainCompetitor[]
+}
+
+model DomainCompetitor {
+  id               String   @id @default(cuid())
+  sourceDomainId   String
+  normalizedDomain String   @db.VarChar(255)
+  displayDomain    String   @db.VarChar(255)
+  createdAt        DateTime @default(now())
+  sourceDomain     Domain   @relation(fields: [sourceDomainId], references: [id], onDelete: Cascade)
+  @@unique([sourceDomainId, normalizedDomain])
+  @@index([normalizedDomain])
 }
 
 model DomainAlias {
@@ -78,8 +90,16 @@ model AuditRun {
   schemaCoverage        Float?
   indexableRate         Float?
   gscAveragePosition    Float?
+  gscClicks             Int?
+  gscImpressions        Int?
+  gscCtr                Float?
+  gscKeywordCount       Int?
   gscPeriodStart        DateTime?
   gscPeriodEnd          DateTime?
+  ga4Sessions           Int?
+  ga4Users              Int?
+  ga4EngagementRate     Float?
+  ga4BounceRate         Float?
   ga4PeriodStart        DateTime?
   ga4PeriodEnd          DateTime?
   averageLcp            Float?
@@ -127,6 +147,14 @@ model RunPageMetric {
   schemaEligible        Boolean
   schemaAppropriate     Boolean
   contentAgeDays        Int?
+  gscClicks             Int?
+  gscImpressions        Int?
+  gscCtr                Float?
+  gscPosition           Float?
+  ga4Sessions           Int?
+  ga4Users              Int?
+  ga4EngagementRate     Float?
+  ga4BounceRate         Float?
   lcp                   Float?
   cls                   Float?
   inp                   Float?
