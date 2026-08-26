@@ -59,7 +59,7 @@ Always select the provider, target, market, and exact dates. Provider traffic, r
 - **AIO:** answer-readiness dimensions, advanced evidence, and exact opportunities.
 - **Findings:** Critical, Warning, and Info in that default order with filters and definitions.
 
-Use the information icon on KPI cards to see the metric's source, reporting dates, denominator, or limitation. Tooltips remain inside the viewport and are accessible by hover, focus, and keyboard. The fixed bottom-right connectivity strip shows database, GA4, GSC, PageSpeed Insights, and SE Ranking status without entering the report canvas. Green means connected/ready, yellow means optional setup or connection is incomplete, and red means the status check failed or the service is unavailable. A CSV import counts as imported evidence for a report; it does not turn an API icon green.
+Use the information icon on KPI cards to see the metric's source, reporting dates, denominator, or limitation. Tooltips remain inside the viewport and are accessible by hover, focus, and keyboard. The fixed bottom-right connectivity strip shows database, GA4, GSC, PageSpeed Insights, and SE Ranking status without entering the report canvas. Green means connected/ready, yellow means optional setup or connection is incomplete, and red means the status check failed or the service is unavailable. For PageSpeed, green specifically means an API key is stored locally; Google validates that key, its restrictions, and its live quota only when an audit requests PageSpeed data. Saving or removing the key refreshes the strip immediately. A CSV import counts as imported evidence for a report; it does not turn an API icon green.
 
 ## Severity
 

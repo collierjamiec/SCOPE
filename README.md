@@ -178,6 +178,8 @@ Credentials are stored locally in `.scope/google-analytics.json` by default with
 
 The integration paginates high-cardinality reports, requests property quota state, and retries HTTP 429/500/503 responses with bounded backoff. `runReport` is implemented now; pivot, realtime, funnel, metadata-driven report building, and optional BigQuery event-level analysis remain documented extension points—not implied current features. See the [step-by-step GA4 Data API guide](docs/GA4-DATA-API.md).
 
+The bottom-right PageSpeed indicator turns green immediately after a key is saved locally. This confirms local configuration, not a permanent Google connection: key validity, API restrictions, and current quota are verified when an audit makes a PageSpeed request.
+
 ### CSV fallback
 
 For reliable engagement and bounce data without OAuth, create a GA4 **Explore → Free form** exploration with **Landing page + query string** as the row dimension and Sessions, Total users, Engaged sessions, Engagement rate, Bounce rate, and Key events as metrics, then export CSV. The standard Landing page detail report is also accepted, but it may omit either rate. SCOPE preserves a missing metric as **Unavailable in export** instead of silently converting it to 0.0%. SCOPE matches supported paths to crawled URLs and reports imported versus matched rows. When both sources are selected, the direct API takes precedence for that audit.
