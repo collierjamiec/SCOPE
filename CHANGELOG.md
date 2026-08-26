@@ -6,6 +6,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Replaced browser-native KPI title hints with visible, accessible hover/focus tooltips on current-audit and historical Trends dashboards.
 - Treat canonical URLs that differ only by a trailing slash as equivalent, explicitly disclose archive HTTP/robots/canonical evidence, and keep widespread informational archive reviews from being mislabeled high-impact.
 - Added an explicit Potential keywords KPI and keyword-evidence narrative to audit executive summaries, separating observed GSC/SERP keywords from context-inferred targets and disclosing average/range heuristic confidence in both dashboard and document reports.
 - Added historical traffic diagnostics and an executive summary covering direction, evidence, recurring issues, quick wins, and deeper SEO/AIO business guidance.
