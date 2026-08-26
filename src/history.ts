@@ -65,7 +65,7 @@ export async function getLatestDomainAuditConfig(domainId: string) {
   if (!run) return null;
   let config = run.configJson as Record<string, unknown>;
   if (run.reportJsonPath) try { const saved = JSON.parse(await readFile(run.reportJsonPath, 'utf8')) as AuditReport; config = saved.config as unknown as Record<string, unknown>; } catch { /* The database snapshot remains a safe fallback. */ }
-  const allowed = ['maxPages','maxKeywords','maxRankings','concurrency','delayMs','pageSpeed','pageSpeedSkipArchives','excludePaths','maxDepth','maxUrlsPerPath','stripTrackingParameters','renderJavaScript','sitemapOnly','excludeArchives','externalCrawlDepth','maxExternalPages','analyzeImages','reportBrokenLinks','analyzeSchema'];
+  const allowed = ['maxPages','maxKeywords','maxRankings','concurrency','delayMs','pageSpeed','pageSpeedConcurrency','pageSpeedSkipArchives','excludePaths','maxDepth','maxUrlsPerPath','stripTrackingParameters','renderJavaScript','sitemapOnly','excludeArchives','externalCrawlDepth','maxExternalPages','analyzeImages','reportBrokenLinks','analyzeSchema'];
   return { sourceDomain: run.normalizedDomain, sourceRunId: run.id, generatedAt: run.generatedAt, config: Object.fromEntries(allowed.filter(key => config[key] !== undefined).map(key => [key, config[key]])) };
 }
 

@@ -9,6 +9,8 @@ export interface AuditConfig {
   delayMs: number;
   userAgent: string;
   pageSpeed: boolean;
+  /** Number of independent PageSpeed URL requests allowed in flight. */
+  pageSpeedConcurrency?: number;
   /** Do not spend PageSpeed quota on category and tag archive listings. */
   pageSpeedSkipArchives?: boolean;
   pageSpeedApiKey?: string;
