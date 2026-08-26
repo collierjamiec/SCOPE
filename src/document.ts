@@ -308,7 +308,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   children.push(body(`Reporting period: ${periodText(report.importedData.ga4DateRange, 'unavailable - set the GA4 dates in Connected data')}. Rows are sorted by sessions from greatest to least. Engagement rate and bounce rate are imported independently from the GA4 export; omitted metrics are labeled unavailable rather than zero.`));
   if (!ga4Pages.length) children.push(body('No GA4 landing-page rows matched analyzed pages.'));
   else children.push(dataTable(
-    ['Landing page', 'Sessions', 'Active users', 'Engaged sessions', 'Engagement rate', 'Bounce rate', 'Key events'],
+    ['Landing page', 'Sessions', 'Total users', 'Engaged sessions', 'Engagement rate', 'Bounce rate', 'Key events'],
     ga4Pages.map(page => [page.url, page.analytics!.sessions, page.analytics!.activeUsers, page.analytics!.engagedSessions, page.analytics!.engagementRate === null ? 'Unavailable' : `${(page.analytics!.engagementRate * 100).toFixed(1)}%`, page.analytics!.bounceRate === null || page.analytics!.bounceRate === undefined ? 'Unavailable' : `${(page.analytics!.bounceRate * 100).toFixed(1)}%`, page.analytics!.keyEvents]),
     [2600, 950, 950, 1150, 1350, 1250, 1110]
   ));

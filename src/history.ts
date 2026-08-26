@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { rename, rm, rmdir, stat } from 'node:fs/promises';
+import { readFile, readdir, rename, rm, rmdir, stat } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient, type ComparisonStatus, type DeltaState } from './generated/prisma/client.js';
@@ -120,6 +120,17 @@ const safeStoredPath = (stored: string, outputRoot: string) => {
   if (!rel || rel.startsWith(`..${sep}`) || rel === '..') throw new Error('Stored audit path is outside the configured audit-output root.');
   return target;
 };
+export async function getHistoricalRunArtifacts(runId: string, outputRoot: string) {
+  if (!historyEnabled()) return null;
+  const run = await db().auditRun.findUnique({ where: { id: runId }, select: { id: true, domainId: true, generatedAt: true, status: true, outputDirectory: true, reportJsonPath: true } });
+  if (!run?.outputDirectory || !run.reportJsonPath) return null;
+  const directory = safeStoredPath(run.outputDirectory, outputRoot), reportPath = safeStoredPath(run.reportJsonPath, outputRoot);
+  const report = JSON.parse(await readFile(reportPath, 'utf8')) as AuditReport;
+  const files = await readdir(directory);
+  const docx = files.find(file => /^SCOPE-Audit-.+\.docx$/i.test(file));
+  const pdf = files.find(file => /^SCOPE-Audit-.+\.pdf$/i.test(file));
+  return { run: { id: run.id, domainId: run.domainId, generatedAt: run.generatedAt, status: run.status }, report, files: { docx: docx ? resolve(directory, docx) : null, pdf: pdf ? resolve(directory, pdf) : null } };
+}
 export async function deleteRunHistory(runId: string, confirmation: string, outputRoot: string, actor = 'local-user') {
   const prisma = db(), run = await prisma.auditRun.findUnique({ where: { id: runId }, include: { domain: true } });
   if (!run) throw new Error('Run not found.');

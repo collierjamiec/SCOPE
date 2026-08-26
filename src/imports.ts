@@ -123,7 +123,7 @@ export function applyGa4Export(pages: PageResult[], csv: string | undefined, ori
     const page = pageMap.get(path); if (!page) continue;
     const engagementRaw = field(row, ['engagementrate']), bounceRaw = field(row, ['bouncerate']);
     page.analytics = {
-      sessions: number(field(row, ['sessions'])), activeUsers: number(field(row, ['activeusers', 'users'])),
+      sessions: number(field(row, ['sessions'])), activeUsers: number(field(row, ['totalusers', 'users', 'activeusers'])),
       engagedSessions: number(field(row, ['engagedsessions'])), engagementRate: engagementRaw === '' ? null : number(engagementRaw) / (engagementRaw.includes('%') ? 100 : 1), bounceRate: bounceRaw === '' ? null : number(bounceRaw) / (bounceRaw.includes('%') ? 100 : 1),
       keyEvents: number(field(row, ['keyevents', 'conversions']))
     };

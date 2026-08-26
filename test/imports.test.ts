@@ -40,9 +40,10 @@ test('reads the reporting-period filter from a standard GSC Filters export', () 
 
 test('attaches GA4 landing-page metrics to matching pages', () => {
   const pages = [{ url: 'https://example.com/a', analytics: undefined }] as unknown as PageResult[];
-  const count = applyGa4Export(pages, 'Landing page,Sessions,Active users,Engaged sessions,Engagement rate,Bounce rate,Key events\n/a,40,30,25,62.5%,37.5%,3\n', 'https://example.com');
+  const count = applyGa4Export(pages, 'Landing page,Sessions,Total users,Engaged sessions,Engagement rate,Bounce rate,Key events\n/a,40,30,25,62.5%,37.5%,3\n', 'https://example.com');
   assert.equal(count, 1);
   assert.equal(pages[0].analytics?.sessions, 40);
+  assert.equal(pages[0].analytics?.activeUsers, 30);
   assert.equal(pages[0].analytics?.engagementRate, 0.625);
   assert.equal(pages[0].analytics?.bounceRate, 0.375);
 });

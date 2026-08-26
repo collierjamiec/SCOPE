@@ -6,6 +6,11 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Added full read-only historical audit dashboards, retained report JSON retrieval, original DOCX/PDF downloads, audit-date disclaimers, and an Open full report action for every stored run.
+- Replaced the Trends domain dropdown and merge dropdown with separate searchable table modals showing audit counts, latest audit dates, and latest page counts.
+- Refined main dashboard KPIs to show schema coverage, aggregate engagement rate, session-weighted bounce rate, sessions, and total users; moved keyword and severity totals into the Executive Summary.
+- Added accessible KPI information icons with crawl/GSC/GA4 reporting-period provenance; the average GSC position context includes the number of observed ranking keywords contributing to the weighted average.
+- Ensured the SCOPE crosshairs brand mark is explicitly rendered on read-only historical audit dashboards.
 - Added GA4 bounce-rate ingestion, missing-data validation, sortable dashboard reporting, CSV export, DOCX/PDF reporting, and updated Explore export instructions.
 - Improved report quality with rule-specific actions, stable run-history links, normalized orphan detection, interpreted redirect classifications, complete gated-auth exclusion, actionable JSON-LD syntax/property findings, search-operator filtering, evidence-weighted GSC cannibalization, missing-aware GA4 engagement rates, accessible link-name extraction, distinct image suggestions, collapsed social-share inventory, and wider report columns.
 - Added self-initializing MariaDB startup, automatic `.env` loading and migration deployment, Docker Compose recovery for local installations, database health states, and clear first-baseline guidance in the Trends dashboard.
