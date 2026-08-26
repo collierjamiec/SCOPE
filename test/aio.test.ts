@@ -27,3 +27,15 @@ test('intent opportunity states the missing signal and gives a topic-specific ac
   assert.match(indicator?.evidence ?? '', /0 question-led headings/);
   assert.match(indicator?.recommendation ?? '', /realistic follow-up question for this specific topic/);
 });
+
+test('adds advanced answer evidence without rewarding unsupported machine-first copy', () => {
+  const assessment = assessAio(input({
+    text: 'Our 2026 study measured 240 audited pages and explains the method for readers.',
+    h2s: ['What did the study find?', 'Definition', 'Comparison'],
+    directAnswerPairs: 1, definitionPassages: 1, comparisonStructures: 1, attributedQuotes: 1,
+    numericClaims: 1, originalDataClaims: 1, recognizablePrimarySources: 1, readabilityGrade: 9
+  }));
+  assert.equal(assessment.advancedSignals?.directAnswerPairs, 1);
+  assert.equal(assessment.indicators.find(item => item.key === 'human_first')?.status, 'pass');
+  assert.equal(assessment.indicators.find(item => item.key === 'numerical_specificity')?.status, 'pass');
+});

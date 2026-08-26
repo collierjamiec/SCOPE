@@ -46,6 +46,14 @@ The most differentiated SCOPE opportunities are not simple checklist parity:
 - **Entity and author trust:** detect named authors, reviewer credentials, organization identity, editorial policies, citations, and consistent entity relationships.
 - **Intermittent reliability:** retain response status and latency distributions by page/template over time so transient outages are not mistaken for permanent faults.
 
+## Implemented AIO/AEO/GEO evidence layer
+
+SCOPE now separates native answer-readiness evidence from externally observed AI visibility. The native crawl detects direct question/answer passages, definitions, comparisons, attributed quotations, numerical and apparent first-party data claims, recognizable source links, volatile facts, contextualized data visuals, and entity-name consistency. It reports observed GSC question queries whose landing pages lack a concise answer. Human readability is a hard constraint: the system does not recommend robotic prose, unsupported precision, invented sources, or schema unsupported by visible content.
+
+The separate AI Intelligence workspace accepts provider CSVs and an optional, device-local SE Ranking API connection. The API reads AI Results Tracker projects, configured engines and prompts, dated rankings/observations, and optional bounded answer/source/brand evidence. Configured competitor appearances are shown per prompt. Rule-based “likely why” hypotheses explain the observed gap, show confidence based on the available evidence stack, and always state the next verification step. Provider-only observations remain low confidence and all provider evidence stays separate from GSC and GA4.
+
+The next AI-intelligence steps are topic/funnel clustering of prompt portfolios, prompt-set version fingerprints for stricter trend comparability, crawl-to-prompt semantic matching, source-domain authority classification, richer visual evidence extraction, and a provider-agnostic adapter contract beyond the current CSV and SE Ranking pathways.
+
 ## Competitive intelligence that supports business decisions
 
 Competitive reporting should distinguish four roles:
@@ -111,7 +119,6 @@ Domain identity uses one shared normalizer across audit history, competitor rela
 
 1. Technical parity with context: hreflang, duplicate metadata, header/HTML directive conflicts, sitemap contradictions, image/resource size, and asset delivery checks.
 2. Competitive evidence quality: role classification, topic/funnel segmentation, import comparability, and historical provider-series tracking.
-3. Content authority: decay/debt, semantic completeness, intent clustering, citation-worthiness, and internal authority flow.
+3. Content authority: extend the implemented citation-worthiness and answer-shape signals into decay/debt, semantic completeness, intent clustering, and internal authority flow.
 4. CRO Wave 1: landing-page opportunity map, CTA/path diagnostics, GA4 segment imports, and quick wins.
 5. CRO Wave 2/3 only after required GA4 events, dimensions, and instrumentation are validated.
-

@@ -88,6 +88,38 @@ export function applyInternalGraphMetrics(pages: PageResult[], startUrl: string,
   }
 }
 
+export function applyEntityConsistency(pages: PageResult[]): void {
+  const normalized = (value: string) => value.toLowerCase().replace(/\b(?:incorporated|corporation|company|limited|llc|ltd|pllc|corp)\.?\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const entities = pages.flatMap(page => (page.entityNames ?? []).map(entity => ({ page, ...entity, normalized: normalized(entity.name) }))).filter(entity => entity.normalized.length >= 4);
+  const groups: typeof entities[] = [];
+  for (const entity of entities) {
+    const match = groups.find(group => group[0].type.toLowerCase() === entity.type.toLowerCase() && (group[0].normalized === entity.normalized || group[0].normalized.startsWith(`${entity.normalized} `) || entity.normalized.startsWith(`${group[0].normalized} `)));
+    if (match) match.push(entity); else groups.push([entity]);
+  }
+  for (const group of groups) {
+    const variants = [...new Set(group.map(entity => entity.name))];
+    if (variants.length < 2) continue;
+    const evidence = `Structured-data names observed for a possibly identical ${group[0].type}: ${variants.join(' | ')}`;
+    for (const page of new Set(group.map(entity => entity.page))) if (!page.findings.some(finding => finding.rule === 'aio_entity_naming_consistency')) page.findings.push({ category: 'aio', severity: 'info', rule: 'aio_entity_naming_consistency', message: 'Possible entity naming inconsistency: review whether these names refer to the same real-world entity and standardize the preferred name, legal-name usage, and sameAs identifiers when appropriate.', evidence });
+  }
+}
+
+function applyObservedQuestionCoverage(pages: PageResult[], keywords: AuditReport['keywords']): void {
+  const byUrl = new Map(pages.map(page => [graphKey(page.url), page])), gaps = new Map<PageResult, Array<{ query: string; impressions: number }>>();
+  for (const keyword of keywords.filter(item => item.searchConsole && /^(?:what|why|how|when|where|who|which|can|does|do|is|are|should|will)\b/i.test(item.keyword))) {
+    for (const url of keyword.searchConsole!.pages) {
+      let page: PageResult | undefined; try { page = byUrl.get(graphKey(url)); } catch { continue; }
+      if (!page || (page.aio.advancedSignals?.directAnswerPairs ?? 0) > 0) continue;
+      const list = gaps.get(page) ?? [], metrics = keyword.searchConsole!.pageMetrics?.[url];
+      list.push({ query: keyword.keyword, impressions: metrics?.impressions ?? 0 }); gaps.set(page, list);
+    }
+  }
+  for (const [page, queries] of gaps) {
+    const ordered = queries.sort((a, b) => b.impressions - a.impressions).slice(0, 5), impressions = queries.reduce((sum, item) => sum + item.impressions, 0);
+    page.findings.push({ category: 'aio', severity: 'info', rule: 'aio_observed_question_gap', message: `GSC shows this page for ${queries.length} question-led quer${queries.length === 1 ? 'y' : 'ies'}, but SCOPE did not detect a question heading followed by a concise answer passage. Review the actual intent before restructuring the content.`, evidence: `${ordered.map(item => `${item.query} (${item.impressions} impressions)`).join(' | ')}; ${impressions} observed impressions across the listed question queries.` });
+  }
+}
+
 export function applySitewideStructuralMetrics(pages: PageResult[], excluded: Array<{ url: string; reason: string; status?: number }>) {
   const pageByKey = new Map(pages.map(page => [graphKey(page.url), page])), excludedByKey = new Map(excluded.map(page => [graphKey(page.url), page]));
   let canonicalChains = 0, canonicalNon200Targets = 0;
@@ -436,6 +468,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
   }
   const exhaustiveGraph = input.maxPages === null && !configuredExclusions.length && input.maxDepth === null;
   applyInternalGraphMetrics(pages, startUrl, exhaustiveGraph);
+  applyEntityConsistency(pages);
   await onProgress({ phase: 'keywords', message: 'Scoring keyword targets and checking cannibalization', fetched: fetched.size, analyzed: pages.length, queued: 0, percent: 98, ...findingCounts() });
   const keywords = aggregateKeywords(pages, input.maxKeywords);
   const standardGscFiles = input.gscCsvFiles?.length ? input.gscCsvFiles : input.gscCsv ? [input.gscCsv] : [];
@@ -448,6 +481,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     || b.score - a.score
     || a.keyword.localeCompare(b.keyword));
   if (keywords.length > input.maxKeywords) keywords.splice(input.maxKeywords);
+  applyObservedQuestionCoverage(pages, keywords);
   const gscDateRange = input.gscDateRangeOverride ?? detectGscDateRange([input.gscQueryPageCsv, ...standardGscFiles]);
   const ga4Rows = applyGa4Export(pages, input.ga4Csv, startUrl);
   const ga4DateRange = input.ga4DateRangeOverride ?? detectGa4DateRange(input.ga4Csv);

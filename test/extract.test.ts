@@ -34,6 +34,16 @@ test('produces transparent AI answer-readiness dimensions and opportunities', ()
   assert.equal(result.aio.visibilityMeasured, false);
   assert.equal(result.aio.indicators.find(item => item.key === 'snippet_access')?.status, 'blocked');
   assert.ok(result.aio.questionsDetected.includes('What is an answering service?'));
+  assert.equal(result.aio.advancedSignals?.directAnswerPairs, 1);
+});
+
+test('captures citation-worthy structures, contextual visuals, and declared entities', () => {
+  const html = '<title>Original Data Study</title><script type="application/ld+json">{"@type":"Dataset","name":"SCOPE Benchmark","creator":{"@type":"Organization","name":"Example Research"},"citation":"https://data.gov/example"}</script><main><h1>Original Data Study</h1><h2>What did the study find?</h2><p>Our 2026 research analyzed 240 websites and found a 32% improvement.</p><h2>Definition</h2><p>Answer readiness is the ability to present supported information clearly.</p><blockquote>Evidence should help readers first. — Jamie C. Collier</blockquote><figure><img src="chart.png" alt="Chart showing a 32 percent improvement"><figcaption>Results from the 240-site benchmark.</figcaption></figure><a href="https://data.gov/example">Primary dataset</a></main>';
+  const result = extractPage('https://example.test/study', 'https://example.test/study', 200, 'text/html', html, new Headers());
+  assert.ok((result.aio.advancedSignals?.numericClaims ?? 0) > 0);
+  assert.ok((result.aio.advancedSignals?.originalDataClaims ?? 0) > 0);
+  assert.ok((result.aio.advancedSignals?.dataRichImagesWithContext ?? 0) > 0);
+  assert.ok(result.entityNames?.some(entity => entity.name === 'Example Research'));
 });
 
 test('classifies archive pages and applies archive-specific findings', () => {

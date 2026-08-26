@@ -145,6 +145,11 @@ function pageSection(page: PageResult, index: number, config: AuditReport['confi
       [[page.aio.dimensions.accessibility, page.aio.dimensions.extractability, page.aio.dimensions.evidence, page.aio.dimensions.entityClarity, page.aio.dimensions.intentCoverage, page.aio.dimensions.freshness, page.aio.dimensions.multimodal]],
       [950, 1650, 1150, 1350, 1450, 1200, 1610]
     ));
+    if (page.aio.advancedSignals) children.push(dataTable(
+      ['Direct answers', 'Definitions', 'Comparisons', 'Attributed quotes', 'Numeric / original data', 'Data visuals with context'],
+      [[page.aio.advancedSignals.directAnswerPairs, page.aio.advancedSignals.definitionPassages, page.aio.advancedSignals.comparisonStructures, page.aio.advancedSignals.attributedQuotes, `${page.aio.advancedSignals.numericClaims} / ${page.aio.advancedSignals.originalDataClaims}`, `${page.aio.advancedSignals.dataRichImagesWithContext} / ${page.aio.advancedSignals.dataRichImages}`]],
+      [1500, 1500, 1500, 1600, 1900, 2370]
+    ));
     for (const indicator of page.aio.indicators.filter(item => item.status !== 'pass')) children.push(bullet(`${indicator.label}: ${indicator.recommendation ?? indicator.evidence}`));
   }
   if (page.pageSpeed.length) {
@@ -242,6 +247,8 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
       [1800, 1900, 5660]
     ),
     body('Score weights: crawler/snippet accessibility 20; answer extractability 20; evidence and citation readiness 20; entity clarity 15; intent coverage 15; freshness 5; multimodal accessibility 5.'),
+    body(`Advanced evidence observed across the analyzed pages: ${aioPages.reduce((sum, page) => sum + (page.aio.advancedSignals?.directAnswerPairs ?? 0), 0)} direct question/answer pairs; ${aioPages.reduce((sum, page) => sum + (page.aio.advancedSignals?.definitionPassages ?? 0), 0)} definition passages; ${aioPages.reduce((sum, page) => sum + (page.aio.advancedSignals?.comparisonStructures ?? 0), 0)} comparison structures; ${aioPages.reduce((sum, page) => sum + (page.aio.advancedSignals?.attributedQuotes ?? 0), 0)} attributed quotes; ${aioPages.reduce((sum, page) => sum + (page.aio.advancedSignals?.numericClaims ?? 0), 0)} numerical claims; and ${aioPages.reduce((sum, page) => sum + (page.aio.advancedSignals?.originalDataClaims ?? 0), 0)} apparent first-party data claims. These are structural observations, not verified AI citations.`),
+    body('Human readability and task completion remain the primary constraint. SCOPE does not recommend robotic answer blocks, unsupported precision, invented sources, or schema unsupported by visible content. Claim is a Schema.org type, citation is a CreativeWork property, and neither guarantees a Google rich result or an AI citation.'),
     heading('Domain SEO measurements', 1),
     dataTable(
       ['Measurement', 'Value', 'Measurement', 'Value'],
@@ -328,7 +335,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   children.push(body(`Observed issues use exact GSC query-to-page evidence for ${cannibalizationPeriod}; inferred issues use overlapping on-page title, heading, metadata, and body signals. Every URL below is included so the preferred page and consolidation, differentiation, canonicalization, or internal-linking actions can be reviewed directly.`));
   if (!report.cannibalization.length) children.push(body('No overlapping on-page targeting met the cannibalization threshold.'));
   for (const issue of report.cannibalization) {
-    children.push(heading(`${issue.severity.toUpperCase()}: ${issue.keyword}`, 2));
+    children.push(heading(`${issue.severity.toUpperCase()} ${issue.intentType === 'question_answer' ? 'ANSWER/SNIPPET' : 'KEYWORD-TARGET'} OVERLAP: ${issue.keyword}`, 2));
     children.push(body(issue.reason));
     const totalImpressions = issue.pages.reduce((sum, page) => sum + (page.impressions ?? 0), 0), strongestScore = issue.pages[0]?.score || 0;
     for (const [index, page] of issue.pages.entries()) {

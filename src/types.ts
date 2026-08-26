@@ -96,6 +96,21 @@ export interface AioAssessment {
   questionsDetected: string[];
   answerPassages: string[];
   indicators: AioIndicator[];
+  /** Supplemental diagnostics do not change the 100-point readiness score. */
+  advancedSignals?: {
+    directAnswerPairs: number;
+    definitionPassages: number;
+    comparisonStructures: number;
+    attributedQuotes: number;
+    unattributedQuotes: number;
+    numericClaims: number;
+    originalDataClaims: number;
+    vagueClaims: number;
+    recognizablePrimarySources: number;
+    volatileClaims: number;
+    dataRichImages: number;
+    dataRichImagesWithContext: number;
+  };
   visibilityMeasured: false;
 }
 export interface CtaInfo extends LinkInfo {
@@ -210,6 +225,8 @@ export interface PageResult {
   images: ImageInventoryItem[];
   imageRecommendations: ImageRecommendation[];
   aio: AioAssessment;
+  /** Named entities declared in structured data; used for sitewide consistency review. */
+  entityNames?: Array<{ name: string; type: string }>;
   htmlLang: string | null;
   hasViewportMeta: boolean;
   canonicalMatchesUrl: boolean | null;
@@ -224,6 +241,7 @@ export interface PageResult {
 export interface CannibalizationIssue {
   keyword: string;
   severity: "possible" | "likely";
+  intentType?: "question_answer" | "keyword_target";
   pages: Array<{ url: string; score: number; clicks?: number; impressions?: number; position?: number }>;
   reason: string;
 }

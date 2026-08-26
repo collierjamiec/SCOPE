@@ -37,6 +37,22 @@ function schemaValidationIssues(value: unknown): string[] {
   return nodes.flatMap(node => (typeof node['@type'] === 'string' ? [node['@type']] : Array.isArray(node['@type']) ? node['@type'].filter((type): type is string => typeof type === 'string') : []).flatMap(type => (required[type] ?? []).filter(property => node[property] === undefined || node[property] === '').map(property => `${type} is missing core property “${property}”`)));
 }
 
+function schemaHasProperty(value: unknown, property: string): boolean {
+  if (Array.isArray(value)) return value.some(item => schemaHasProperty(item, property));
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return record[property] !== undefined || Object.values(record).some(item => schemaHasProperty(item, property));
+}
+
+function schemaEntities(value: unknown): Array<{ name: string; type: string }> {
+  if (Array.isArray(value)) return value.flatMap(schemaEntities);
+  if (!value || typeof value !== 'object') return [];
+  const record = value as Record<string, unknown>, types = typeof record['@type'] === 'string' ? [record['@type']] : Array.isArray(record['@type']) ? record['@type'].filter((item): item is string => typeof item === 'string') : [];
+  const name = typeof record.name === 'string' ? cleanText(record.name) : '';
+  const own = name ? types.filter(type => /^(?:Organization|Corporation|LocalBusiness|Person|Brand|Product|Service)$/i.test(type)).map(type => ({ name, type })) : [];
+  return [...own, ...Object.values(record).flatMap(schemaEntities)];
+}
+
 export function suggestSchemas(page: Pick<PageResult, 'url'|'title'|'h1s'|'h2s'|'text'|'schemas'>): SuggestedSchema[] {
   const existing = new Set(page.schemas.flatMap(schema => schema.types).map(type => type.toLowerCase()));
   const content = `${page.title} ${page.h1s.join(' ')} ${page.h2s.join(' ')} ${page.text.slice(0, 12000)}`.toLowerCase();
@@ -50,6 +66,12 @@ export function suggestSchemas(page: Pick<PageResult, 'url'|'title'|'h1s'|'h2s'|
   if (/\btestimonial(s)?\b|customer reviews?|what (our )?customers say/.test(content)) add('Review', 'Visible testimonial or review content may support Review markup when each review identifies its subject and author.', 'medium');
   if (/\b[1-5](?:\.\d)?\s*(?:\/\s*5|stars?)\b|aggregate rating|rated [1-5]/.test(content)) add('AggregateRating', 'A visible rating signal was detected; use only when the aggregate value and review count are shown to users and meet Google policies.', 'medium');
   if (/\bhow to\b|step-by-step|\bstep 1\b/.test(content)) add('HowTo', 'The page appears to present a step-based process.', 'medium');
+  const originalData = /\b(?:our (?:data|research|analysis|survey)|we (?:found|measured|observed)|survey of)\b[^.]{0,180}\b(?:\d+(?:\.\d+)?%?|\$[\d,.]+)\b/i.test(page.text);
+  const datasetContext = /\b(?:dataset|methodology|sample size|download (?:the )?(?:data|csv)|research methods?)\b/i.test(page.text);
+  const citedStatistics = /\b(?:according to|study|report|research|data from)\b[^.]{0,180}\b(?:\d+(?:\.\d+)?%?|\$[\d,.]+)\b/i.test(page.text);
+  if (originalData && datasetContext) add('Dataset', 'The page appears to publish original structured findings with methodology or downloadable data. Dataset markup should identify the dataset, creator, publisher, dates, and distribution only when those elements are genuinely present.', 'medium');
+  if (originalData && !datasetContext) add('Claim', 'A site-original quantitative finding was detected. Claim markup may describe a clearly scoped factual claim, but it is a Schema.org description—not a guaranteed Google rich result or AI citation.', 'medium');
+  if (citedStatistics && !page.schemas.some(schema => schema.validJson && schemaHasProperty(schema.parsed, 'citation'))) add('citation property', 'The page cites third-party statistics. On compatible CreativeWork markup, the Schema.org citation property can identify the referenced work; citation is a property, not a standalone schema type.', 'medium');
   if (/\b(blog|article|guide|news|resources?)\b/.test(`${path} ${content.slice(0, 1000)}`)) add('Article', 'The page appears editorial or educational and may benefit from author, publisher, and date properties.', 'medium');
   else if (/\b(service|solutions?|answering service|receptionist|consultation)\b/.test(content)) add('Service', 'The page appears to describe a service offering and its audience or provider.', 'medium');
   if (path === '/' || path === '') add('Organization', 'The homepage can identify the organization, logo, URL, and authoritative sameAs profiles.', 'high');
@@ -173,6 +195,27 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const h2s = headings.filter(h => h.level === 2).map(h => h.text);
   const questionHeadings = headings.map(heading => heading.text).filter(value => /\?|^(what|why|how|when|where|who|which|can|does|is|are|should)\b/i.test(value));
   const citedClaimCount = (text.match(/\b\d+(?:\.\d+)?%?\b[^.]{0,160}(?:according to|source:|study|report|research|data from)/gi) ?? []).length;
+  const sentences = text.split(/(?<=[.!?])\s+/).map(cleanText).filter(Boolean);
+  const directAnswerPairs = $('h2,h3,h4').filter((_, heading) => /\?|^(what|why|how|when|where|who|which|can|does|is|are|should)\b/i.test(cleanText($(heading).text()))).filter((_, heading) => {
+    let sibling = $(heading).next();
+    while (sibling.length && !/^h[1-6]$/i.test(sibling[0]?.tagName ?? '')) { const answer = cleanText(sibling.is('p') ? sibling.text() : sibling.find('p').first().text()); if (answer.length >= 45 && answer.length <= 500) return true; sibling = sibling.next(); }
+    return false;
+  }).length;
+  const definitionPassages = sentences.filter(sentence => /^(?:[A-Z][^.]{1,80}\s+)?(?:is|are|means|refers to)\s+/i.test(sentence) || /\b(?:is defined as|can be defined as)\b/i.test(sentence)).length;
+  const comparisonStructures = headings.filter(heading => /\b(?:vs\.?|versus|compare|comparison|difference|alternatives?|pros and cons)\b/i.test(heading.text)).length + tableCount;
+  const quotes = $('blockquote'), attributedQuotes = quotes.filter((_, quote) => Boolean(cleanText($(quote).attr('cite')) || cleanText($(quote).find('cite,[itemprop="author"],.author,.attribution').text()) || cleanText($(quote).next('cite,.author,.attribution,figcaption').text()))).length;
+  const unattributedQuotes = Math.max(0, quotes.length - attributedQuotes);
+  const numericClaims = sentences.filter(sentence => /(?:\b\d+(?:\.\d+)?%|[$£€]\s?\d[\d,.]*|\b\d[\d,.]*\s+(?:people|customers|clients|respondents|users|sessions|days|months|years|websites|pages|studies|responses)\b)/i.test(sentence)).length;
+  const originalDataClaims = sentences.filter(sentence => /\b(?:our (?:\d{4}\s+)?(?:data|research|analysis|survey)|we (?:found|measured|observed)|survey of|among our)\b/i.test(sentence) && /(?:\d|[$£€])/.test(sentence)).length;
+  const vagueClaims = sentences.filter(sentence => /\b(?:improved?|increased?|decreased?|reduced?|grew|growth|better|faster)\b/i.test(sentence) && /\b(?:significantly|substantially|dramatically|considerably|many|much|a lot)\b/i.test(sentence) && !/(?:\d|[$£€])/.test(sentence)).length;
+  const recognizablePrimarySources = links.filter(link => !link.internal && /(?:doi\.org|pubmed\.ncbi\.nlm\.nih\.gov|\.gov(?:\/|$)|\.edu(?:\/|$)|data\.|statistics\.|census\.gov)/i.test(link.url)).length;
+  const volatileClaims = sentences.filter(sentence => /(?:\d|[$£€])/.test(sentence) && /\b(?:price|cost|rent|population|rate|market share|salary|revenue|law|regulation|currently|as of|annual|year over year|inflation)\b/i.test(sentence)).length;
+  const dataRichImages = $('img').filter((_, image) => /\b(?:chart|graph|infographic|dashboard|data visualization|statistics?)\b/i.test(`${$(image).attr('src') ?? ''} ${$(image).attr('alt') ?? ''} ${$(image).closest('figure').find('figcaption').text()}`)).length;
+  const dataRichImagesWithContext = $('img').filter((_, image) => {
+    const context = `${cleanText($(image).attr('alt'))} ${cleanText($(image).closest('figure').find('figcaption').text())}`;
+    return /\b(?:chart|graph|infographic|dashboard|data visualization|statistics?)\b/i.test(`${$(image).attr('src') ?? ''} ${context}`) && context.length >= 30;
+  }).length;
+  const entityNames = [...new Map(schemas.filter(schema => schema.validJson).flatMap(schema => schemaEntities(schema.parsed)).map(entity => [`${entity.type.toLowerCase()}|${entity.name.toLowerCase()}`, entity])).values()];
   const preliminarySignals = extractKeywordSignals(title, metaDescription, h1s, h2s, text);
   const primaryKeyword = preliminarySignals.find(signal => signal.phrase.split(' ').length > 1)?.phrase ?? (cleanText(h1s[0] || title) || 'website image');
   const slug = (value: string) => value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
@@ -226,8 +269,16 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
       title, metaDescription, h1s, h2s, text, robotsDirectives,
       schemaTypes: schemas.flatMap(schema => schema.types), externalLinkCount: uniqueExternalLinks.size,
       imageCount, imagesMissingAltText, hasAuthor, hasPublishedDate, hasModifiedDate,
-      lastModified: headers.get('last-modified'), listCount, tableCount, questionHeadings, citedClaimCount
+      lastModified: headers.get('last-modified'), listCount, tableCount, questionHeadings, citedClaimCount,
+      directAnswerPairs, definitionPassages, comparisonStructures, attributedQuotes, unattributedQuotes,
+      numericClaims, originalDataClaims, vagueClaims, recognizablePrimarySources, volatileClaims, contentAgeDays,
+      dataRichImages, dataRichImagesWithContext,
+      hasClaimSchema: schemas.some(schema => schema.types.some(type => type === 'Claim')),
+      hasDatasetSchema: schemas.some(schema => schema.types.some(type => type === 'Dataset')),
+      hasCitationProperty: schemas.some(schema => schema.validJson && schemaHasProperty(schema.parsed, 'citation')),
+      fleschKincaidGrade: contentMetrics.fleschKincaidGrade, averageWordsPerSentence: contentMetrics.averageWordsPerSentence
     }),
+    entityNames,
     keywordSignals: preliminarySignals,
     findings: findingsFor(base), pageSpeed: [], crawledAt: new Date().toISOString()
   };

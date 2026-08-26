@@ -21,7 +21,8 @@ SCOPE distinguishes **AIO answer readiness**, which can be assessed from crawl e
 - Exhaustive image inventory, usage count, alt text, filename or CDN asset identifier, and optimization recommendations
 - Optional PageSpeed Insights and Core Web Vitals
 - SEO, GEO, and AIO opportunities with page-level findings and prioritized affected-page drilldowns
-- AIO answer readiness across accessibility, extractability, evidence, entity clarity, intent coverage, freshness, and multimodal accessibility
+- AIO/AEO/GEO answer readiness across accessibility, extractability, evidence, entity clarity, intent coverage, freshness, and multimodal accessibility
+- Advanced answer evidence: question-led direct answers, definition passages, comparison structures, attributed expertise, numerical specificity, apparent original data, source provenance, volatile-fact freshness, data-rich visuals with explanatory context, and sitewide entity-name consistency
 - Keyword targeting, optional observed GSC query-to-page positions, optional licensed SERP rankings, and evidence-labeled cannibalization signals
 
 ## Crawl behavior and safeguards
@@ -108,7 +109,7 @@ Dashboard controls include:
 
 SCOPE classifies home, landing, article, category, tag, author, search, pagination, and feed surfaces. Indexable archives retain technical title, H1, canonical, status, link, and schema-validity checks, but are not penalized using article-style word-count, readability, H2, meta-description, schema-presence, or AIO-content rules. Instead, SCOPE asks whether archive indexation, canonicalization, pagination, and listing quality are intentional. Search archives receive stronger scrutiny when indexable.
 
-Full Audit is exhaustive and Fast by default: no page or crawl-depth limit, no path exclusions, archive pages included, maximum per-path and external-page ceilings, external crawling to depth 3, all modules enabled, 5,000 keyword candidates, and 100 licensed SERP checks.
+Full Audit is exhaustive and Fast by default: no page or internal crawl-depth limit, no path exclusions, archive pages included, all modules enabled, 5,000 keyword candidates, and 100 licensed SERP checks. It validates directly linked external URLs but does not follow them onto external sites; a custom audit can explicitly enable external crawling to a bounded depth.
 
 ### Finding severity
 
@@ -257,6 +258,24 @@ It must return:
 { "position": 8, "rankingUrl": "https://example.com/crawler" }
 ```
 
+### Optional SE Ranking connection
+
+The **AIO/AEO/GEO Intelligence** workspace can connect to SE Ranking's AI Results Tracker. This connection is optional: SCOPE's native crawl continues to measure on-page answer readiness without it, and dated CSV imports remain available for competitive SEO and AI-visibility data.
+
+In **AIO/AEO/GEO → Connect / sync SE Ranking API**:
+
+1. Paste an SE Ranking API key and choose **Save locally & connect**.
+2. Select the correct SE Ranking project.
+3. Confirm the target domain/brand, market, and exact reporting period.
+4. Decide whether to retrieve answer text, cited sources, and mentioned brands for a bounded number of prompts.
+5. Choose **Sync selected period**. SCOPE imports the project's configured engines and prompts, rankings, mentions, citations, and available visibility observations.
+
+The API key is stored at `.scope/seranking.json` by default with owner-only permissions. Packaged installs can set `SCOPE_DATA_DIR`, and administrators can set `SCOPE_SERANKING_CREDENTIALS_FILE` to an exact path. `SERANKING_API_KEY` is also accepted for managed environments. The key is never copied into MariaDB, audit artifacts, API responses, logs, or Git. Users can replace or remove the local key from the same dialog.
+
+SCOPE uses SE Ranking's project-management and AI Results Tracker APIs. It does not silently call credit-metered Data API endpoints. Provider observations remain labeled **SE Ranking API**, with the engine, market, and reporting period; they are never merged with GSC or GA4.
+
+Good prompt design matters more than prompt volume. Use a stable core set that covers category discovery, problem/solution questions, comparisons, objections, trust/proof, local or situational needs, decision-stage recommendations, and brand-description accuracy. Include branded and non-branded prompts, track equivalent prompts across engines when comparing them, configure legitimate brand aliases, and record changes to prompts, engines, markets, brands, or competitors because those changes can break trend comparability. See [AI intelligence and SE Ranking setup](docs/AI-INTELLIGENCE.md).
+
 ### Image-analysis adapter
 
 Set `IMAGE_ANALYSIS_ENDPOINT` and `IMAGE_ANALYSIS_API_KEY` to enable visual inspection. Without one, recommendations are explicitly based on page context and target keywords.
@@ -273,8 +292,8 @@ The adapter receives `imageUrl`, `pageUrl`, `pageTitle`, `primaryKeywords`, and 
 
 ## Privacy, security, and interpretation
 
-- API keys are read from environment variables and excluded from report configuration.
-- GSC and GA4 files are processed locally; Google credentials are never requested.
+- API keys are read from environment variables or permission-restricted installation-local files and excluded from report configuration, history, and artifacts.
+- GSC and GA4 files are processed locally; optional Google OAuth and SE Ranking credentials are stored locally, are removable/replaceable in the GUI, and are never embedded in reports.
 - Audit only sites you are authorized to crawl and choose an appropriate pace.
 - Keyword targeting, CTA selection, schema suggestions, cannibalization, GEO, and AIO findings are evidence-based heuristics requiring professional review.
 - See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [CHANGELOG.md](CHANGELOG.md).
@@ -289,7 +308,11 @@ Competitive intelligence now has its own `/competitive` dashboard, while crawl h
 
 The reviewed technical-parity, content-authority, CRO, AI-visibility, and competitive-measurement backlog is maintained in [the SCOPE expansion roadmap](docs/EXPANSION-ROADMAP.md). It includes evidence boundaries and delivery sequencing so provider checklists do not overwhelm higher-value business diagnostics.
 
-AIO/AEO/GEO intelligence has its own `/ai-intelligence` dashboard. It separates SCOPE answer-readiness signals from externally observed prompts, mentions, citations, platforms/models, sentiment, and provider visibility/share-of-voice exports. Third-party methodologies are not assumed to be interchangeable or equivalent to Google first-party data.
+AIO/AEO/GEO intelligence has its own `/ai-intelligence` dashboard. It separates SCOPE answer-readiness signals from externally observed prompts, mentions, citations, platforms/models, sentiment, and provider visibility/share-of-voice exports. The optional SE Ranking API connection imports the configured AI Results Tracker prompt set and engines and can retrieve bounded answer/source/brand evidence. The prompt table identifies configured competitor appearances and produces a rule-based “likely why” hypothesis with a disclosed confidence legend and a specific verification step. These hypotheses do not claim access to a model's hidden ranking factors. Third-party methodologies are not assumed to be interchangeable or equivalent to Google first-party data.
+
+The crawl-side advanced evidence model follows a human-first constraint. It rewards concise answer passages, definitions, comparison structure, attributed expertise, supported numbers, source provenance, current volatile facts, explanatory visual context, and consistent entities only when they improve the reader's experience. It does not recommend robotic prose, unsupported numerical precision, invented sources, or structured data unsupported by visible content. `Claim` and `Dataset` are valid Schema.org types in appropriate contexts; `citation` is a CreativeWork property. Their presence does not guarantee a Google rich result or an AI citation.
+
+For feature-by-feature GUI instructions and evidence interpretation, see the [nontechnical user guide](docs/USER-GUIDE.md). For prompt strategy, confidence rules, API behavior, and AI evidence definitions, see [AI intelligence and SE Ranking setup](docs/AI-INTELLIGENCE.md).
 
 ## License
 

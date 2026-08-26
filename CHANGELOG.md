@@ -12,6 +12,12 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Added an optional, locally stored SE Ranking API connection for AI Results Tracker projects, engines, prompts, rankings, mentions, citations, and bounded answer/source/brand evidence; CSV imports remain available and credit-metered Data API calls are never made implicitly.
+- Added prompt-planning onboarding covering brand aliases, competitor roles, market/language, engine comparability, stable prompt portfolios, funnel/question families, and measurement-change disclosure.
+- Added competitor appearances to AI prompt observations plus rule-based “likely why” hypotheses, next-verification guidance, and a transparent low/moderate/high confidence legend that does not claim access to hidden model-ranking factors.
+- Expanded native AIO/AEO/GEO analysis with direct-answer pairs, definitions, comparison structures, attributed expertise, numerical specificity, apparent original data, source provenance, volatile-fact freshness, data-visual context, entity consistency, and observed GSC question-to-content gaps under a human-first quality constraint.
+- Added `Claim`, `Dataset`, and `citation` structured-data guidance with explicit visible-content and rich-result/citation caveats, and included advanced AI evidence in dashboard CSV and DOCX/PDF output.
+- Added dedicated nontechnical GUI and AI-intelligence documentation, credential lifecycle/security guidance, prompt strategy, source boundaries, and feature-by-feature interpretation instructions.
 - Added SE Ranking Positions Detailed, Positions History, Competitors Overall, and Share of Voice import support; detected competitor domains can be reviewed, added individually or in bulk, and launched into live audits while modeled provider evidence remains separate from GSC and GA4.
 - Expanded competitive landscape reporting with shared and competitor-only keywords, head-to-head ranking wins, Top-20 coverage, Share of Voice, and provider traffic forecasts.
 - Reworked cannibalization evidence to name every competing page, explain the exact observed or inferred reason, use SEO titles in the dashboard, and retain actionable full URLs in DOCX/PDF reports.

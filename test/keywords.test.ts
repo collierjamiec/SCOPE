@@ -38,6 +38,12 @@ test('Search Console landing-page overlap flags observed cannibalization', () =>
   assert.match(issues[0].reason, /60%/);
 });
 
+test('labels question-query overlap as an answer and snippet competition hypothesis', () => {
+  const issues = detectCannibalization([{ keyword: 'what is an seo audit', score: 0, confidence: 1, pages: [], ranking: null, searchConsole: { clicks: 3, impressions: 50, ctr: 0.06, position: 8, pages: ['https://example.com/a', 'https://example.com/b'], pageMetrics: { 'https://example.com/a': { clicks: 2, impressions: 30, ctr: 0.067, position: 7 }, 'https://example.com/b': { clicks: 1, impressions: 20, ctr: 0.05, position: 10 } } } }]);
+  assert.equal(issues[0].intentType, 'question_answer');
+  assert.match(issues[0].reason, /answer|snippet/i);
+});
+
 test('suppresses observed overlap when one GSC landing page clearly dominates', () => {
   const issues = detectCannibalization([{ keyword: 'seo audit', score: 0, confidence: 1, pages: [], ranking: null, searchConsole: { clicks: 10, impressions: 100, ctr: 0.1, position: 4, pages: ['https://example.com/a', 'https://example.com/b'], pageMetrics: { 'https://example.com/a': { clicks: 10, impressions: 95, ctr: 0.105, position: 3 }, 'https://example.com/b': { clicks: 0, impressions: 5, ctr: 0, position: 28 } } } }]);
   assert.equal(issues.length, 0);

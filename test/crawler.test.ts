@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { crawlSite, isArchiveUrl, isExcludedUrl, isGatedAuthenticationFlow, isTrailingSlashOnlyRedirect, needsJavaScriptRendering, safeCrawlUrl, validateConfig } from '../src/crawler.js';
+import { applyEntityConsistency, crawlSite, isArchiveUrl, isExcludedUrl, isGatedAuthenticationFlow, isTrailingSlashOnlyRedirect, needsJavaScriptRendering, safeCrawlUrl, validateConfig } from '../src/crawler.js';
+import type { PageResult } from '../src/types.js';
 
 test('accepts an unlimited crawl configuration', () => {
   assert.doesNotThrow(() => validateConfig({ startUrl: 'https://example.test', maxPages: null, maxKeywords: 100, concurrency: 1, delayMs: 0, userAgent: 'test', pageSpeed: false }));
@@ -59,6 +60,13 @@ test('recognizes pure trailing-slash normalization redirects', () => {
   assert.equal(isTrailingSlashOnlyRedirect('https://example.test/article?a=1', 'https://example.test/article/?a=1'), true);
   assert.equal(isTrailingSlashOnlyRedirect('https://example.test/old', 'https://example.test/new/'), false);
   assert.equal(isTrailingSlashOnlyRedirect('http://example.test/article', 'https://example.test/article/'), false);
+});
+
+test('reports conservative sitewide entity naming variants', () => {
+  const minimal = (url: string, name: string): PageResult => ({ requestedUrl: url, url, status: 200, redirectChain: [], contentType: 'text/html', title: name, titleCharacters: name.length, metaDescription: '', metaDescriptionCharacters: 0, canonical: url, robotsDirectives: [], indexable: true, h1s: [name], h2s: [], headings: [], primaryCta: null, schemas: [], wordCount: 1, text: name, links: [], internalLinkCount: 0, externalLinkCount: 0, incomingInternalLinks: 0, imageCount: 0, imagesMissingAltText: 0, imageRecommendations: [], htmlLang: 'en', hasViewportMeta: true, aio: { score: 50, label: 'partial', dimensions: { accessibility: 20, extractability: 10, evidence: 5, entityClarity: 5, intentCoverage: 5, freshness: 0, multimodal: 5 }, questionsDetected: [], answerPassages: [], indicators: [], visibilityMeasured: false }, canonicalMatchesUrl: true, responseTimeMs: 1, suggestedSchemas: [], entityNames: [{ name, type: 'Organization' }], keywordSignals: [], findings: [], pageSpeed: [], crawledAt: new Date().toISOString() });
+  const pages = [minimal('https://example.test/a', 'Phoenix Rising SEO LLC'), minimal('https://example.test/b', 'Phoenix Rising SEO')];
+  applyEntityConsistency(pages);
+  assert.ok(pages.every(page => page.findings.some(finding => finding.rule === 'aio_entity_naming_consistency')));
 });
 
 test('crawl respects robots and excludes noindex pages from analysis', async (context) => {

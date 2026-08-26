@@ -69,6 +69,7 @@ export function aggregateKeywords(pages: PageResult[], maximum: number): Keyword
 
 export function detectCannibalization(keywords: KeywordCandidate[]): CannibalizationIssue[] {
   return keywords.flatMap(keyword => {
+    const questionAnswer = /^(?:what|why|how|when|where|who|which|can|does|do|is|are|should|will)\b/i.test(keyword.keyword);
     if ((keyword.searchConsole?.pages.length ?? 0) > 1) {
       const metrics = keyword.searchConsole!.pageMetrics ?? {};
       const observedPages = keyword.searchConsole!.pages.map(url => ({ url, score: keyword.pages.find(page => page.url === url)?.score ?? 0, ...metrics[url] })).sort((a, b) => (b.impressions ?? 0) - (a.impressions ?? 0));
@@ -81,8 +82,9 @@ export function detectCannibalization(keywords: KeywordCandidate[]): Cannibaliza
       return [{
       keyword: keyword.keyword,
       severity: likely ? 'likely' as const : 'possible' as const,
+      intentType: questionAnswer ? 'question_answer' as const : 'keyword_target' as const,
       pages: observedPages,
-      reason: `Google Search Console reports visibility across ${observedPages.length} landing pages (${totalImpressions} total impressions). The leader holds ${Math.round(leaderShare * 100)}% and the runner-up ${Math.round(runnerUpShare * 100)}% of observed impressions${positionSpread === null ? '' : `; their average positions are ${positionSpread.toFixed(1)} places apart`}. Review query intent, preferred-page consistency, internal linking, and movement across comparable reporting periods.`
+      reason: `Google Search Console reports visibility across ${observedPages.length} landing pages (${totalImpressions} total impressions). The leader holds ${Math.round(leaderShare * 100)}% and the runner-up ${Math.round(runnerUpShare * 100)}% of observed impressions${positionSpread === null ? '' : `; their average positions are ${positionSpread.toFixed(1)} places apart`}.${questionAnswer ? ' Because this is a question-led query, competing partial answers may also split answer/snippet citation signals.' : ''} Review query intent, preferred-page consistency, internal linking, and movement across comparable reporting periods.`
     }]; }
     if (!keyword.pages.length) return [];
     const contenders = keyword.pages.filter(page => page.score >= Math.max(5, keyword.pages[0].score * 0.65));
@@ -91,6 +93,7 @@ export function detectCannibalization(keywords: KeywordCandidate[]): Cannibaliza
     return [{
       keyword: keyword.keyword,
       severity: close ? 'likely' as const : 'possible' as const,
+      intentType: questionAnswer ? 'question_answer' as const : 'keyword_target' as const,
       pages: contenders.map(({ url, score }) => ({ url, score: Number(score.toFixed(2)) })),
       reason: close
         ? 'Multiple indexable pages have similarly strong on-page targeting signals.'

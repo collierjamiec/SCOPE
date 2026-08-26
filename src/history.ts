@@ -74,9 +74,14 @@ export async function listIntelligenceDatasets(domainId: string, datasetType: 'c
 }
 
 export async function importIntelligenceDataset(input: { domainId: string; targetDomain: string; provider: string; datasetType: 'competitive_seo' | 'ai_visibility'; reportStart?: string; reportEnd?: string; market?: string; fileName: string; csv: string }) {
+  const parsed = parseIntelligenceCsv(input.csv, input.datasetType);
+  return importNormalizedIntelligenceDataset({ ...input, ...parsed });
+}
+
+export async function importNormalizedIntelligenceDataset(input: { domainId: string; targetDomain: string; provider: string; datasetType: 'competitive_seo' | 'ai_visibility'; reportStart?: string; reportEnd?: string; market?: string; fileName: string; rows: Array<Record<string, unknown>>; metrics: Record<string, unknown> }) {
   const source = await db().domain.findUnique({ where: { id: input.domainId } }); if (!source) throw new Error('Source domain history was not found.');
-  const targetDomain = normalizeDomain(input.targetDomain), parsed = parseIntelligenceCsv(input.csv, input.datasetType);
-  return db().intelligenceDataset.create({ data: { domainId: input.domainId, targetDomain, provider: input.provider.slice(0, 40), datasetType: input.datasetType, reportStart: input.reportStart ? new Date(`${input.reportStart}T00:00:00Z`) : null, reportEnd: input.reportEnd ? new Date(`${input.reportEnd}T00:00:00Z`) : null, market: input.market?.slice(0, 80) || null, fileName: input.fileName.slice(0, 255), rowCount: parsed.rows.length, metricsJson: json(parsed.metrics), rowsJson: json(parsed.rows) } });
+  const targetDomain = normalizeDomain(input.targetDomain);
+  return db().intelligenceDataset.create({ data: { domainId: input.domainId, targetDomain, provider: input.provider.slice(0, 40), datasetType: input.datasetType, reportStart: input.reportStart ? new Date(`${input.reportStart}T00:00:00Z`) : null, reportEnd: input.reportEnd ? new Date(`${input.reportEnd}T00:00:00Z`) : null, market: input.market?.slice(0, 80) || null, fileName: input.fileName.slice(0, 255), rowCount: input.rows.length, metricsJson: json(input.metrics), rowsJson: json(input.rows) } });
 }
 
 export function normalizePageUrl(value: string): string {
