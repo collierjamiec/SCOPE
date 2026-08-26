@@ -146,7 +146,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const $ = cheerio.load(html);
   const pageType = classifyPageType(finalUrl, $('article,[itemtype*="Article"],meta[property="og:type"][content="article" i]').length > 0);
   const imageCount = $('img').length;
-  const imagesMissingAltText = $('img').filter((_, image) => !cleanText($(image).attr('alt'))).length;
+  const imagesMissingAltText = $('img').filter((_, image) => $(image).attr('alt') === undefined).length;
   const htmlLang = cleanText($('html').attr('lang')) || null;
   const hasViewportMeta = $('meta[name="viewport" i]').length > 0;
   const hasAuthor = $('meta[name="author" i],[rel="author"],.author,[itemprop="author"]').length > 0;
@@ -170,7 +170,15 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const metaRobots = $('meta[name="robots" i],meta[name="googlebot" i]').map((_, el) => $(el).attr('content') ?? '').get().join(',');
   const robotsDirectives = `${headerRobots},${metaRobots}`.toLowerCase().split(/[,\s]+/).filter(Boolean);
   const indexable = status >= 200 && status < 300 && !robotsDirectives.includes('noindex') && /text\/html|application\/xhtml\+xml/i.test(contentType);
-  const headings: Heading[] = $('h1,h2,h3,h4,h5,h6').map((_, el) => ({ text: cleanText($(el).text()), level: Number(el.tagName.slice(1)) as Heading['level'] })).get().filter(h => h.text);
+  // Audit the rendered document, not only <main>: shared components can contain
+  // genuine semantic heading defects. Navigation, footer, hidden UI and modal
+  // headings remain excluded below, while recurring patterns are consolidated
+  // in reporting rather than discarded.
+  const contentRoot = $('body');
+  const headings: Heading[] = contentRoot.find('h1,h2,h3,h4,h5,h6').filter((_, el) => {
+    const element = $(el);
+    return !element.closest('nav,footer,aside,[hidden],[aria-hidden="true"],[role="dialog"],.modal,.popup,.menu,.screen-reader-text,.sr-only,.visually-hidden').length;
+  }).map((_, el) => ({ text: cleanText($(el).text()), level: Number(el.tagName.slice(1)) as Heading['level'] })).get().filter(h => h.text);
   const schemas: SchemaMarkup[] = $('script[type="application/ld+json" i]').map((_, el) => {
     const raw = $(el).html()?.trim() ?? '';
     try { const parsed: unknown = JSON.parse(raw); return { raw, parsed, types: schemaTypes(parsed), validJson: true, validationIssues: schemaValidationIssues(parsed) }; }
@@ -224,22 +232,25 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     if (!src) return null;
     const detected = decodeURIComponent(new URL(src).pathname.split('/').pop() || 'image');
     const cdnManaged = !/\.[a-z0-9]{2,5}$/i.test(detected) && /^[a-f0-9_-]{20,}$/i.test(detected);
-    return { src, alt: cleanText($(image).attr('alt')), filename: cdnManaged ? '[CDN-generated asset identifier]' : detected, cdnManaged };
+    const altAttribute = $(image).attr('alt'), format = detected.match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase() ?? '';
+    const altStatus: 'missing_attribute' | 'descriptive' | 'intentional_empty' = altAttribute === undefined ? 'missing_attribute' : cleanText(altAttribute) ? 'descriptive' : 'intentional_empty';
+    return { src, alt: cleanText(altAttribute), altStatus, filename: cdnManaged ? '[CDN-generated asset identifier]' : detected, format: format || 'unknown', nextGeneration: ['webp','avif'].includes(format), cdnManaged };
   }).get().filter(Boolean);
   const usedAltSuggestions = new Map<string, number>();
   const imageRecommendations: ImageRecommendation[] = $('img[src]').map((imageIndex, image) => {
     const element = $(image);
     const src = normaliseUrl(element.attr('src') ?? '', finalUrl);
     if (!src) return null;
-    const currentAlt = cleanText(element.attr('alt'));
+    const altAttribute = element.attr('alt'), missingAlt = altAttribute === undefined, currentAlt = cleanText(altAttribute);
     const detectedFilename = decodeURIComponent(new URL(src).pathname.split('/').pop() || 'image');
     const hasExtension = /\.[a-z0-9]{2,5}$/i.test(detectedFilename);
     const opaqueCdnAsset = !hasExtension && /^[a-f0-9_-]{20,}$/i.test(detectedFilename);
     const currentFilename = opaqueCdnAsset ? '[CDN-generated asset identifier]' : detectedFilename;
     const stem = detectedFilename.replace(/\.[^.]+$/, '');
-    const extension = (detectedFilename.match(/\.[a-z0-9]{2,5}$/i)?.[0] ?? '.webp').toLowerCase();
+    const currentExtension = (detectedFilename.match(/\.[a-z0-9]{2,5}$/i)?.[0] ?? '').toLowerCase(), legacyFormat = ['.jpg','.jpeg','.png','.gif','.bmp','.tif','.tiff'].includes(currentExtension);
+    const extension = legacyFormat || !currentExtension ? '.webp' : currentExtension;
     const unoptimized = !opaqueCdnAsset && (!stem || /^(img|image|photo|pic|dsc|untitled|screenshot)[-_ ]?\d*$/i.test(stem) || /^[a-f0-9_-]{12,}$/i.test(stem) || /\s|_/.test(stem));
-    if (currentAlt && !unoptimized) return null;
+    if (!missingAlt && !unoptimized && !legacyFormat) return null;
     const context = cleanText(element.closest('figure').find('figcaption').first().text() || element.parent().text() || element.attr('title')).slice(0, 180);
     const filenameSubject = cleanText(stem.replace(/[-_]+/g, ' '));
     const subject = context || (!opaqueCdnAsset && filenameSubject ? filenameSubject : '');
@@ -249,7 +260,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     if (duplicateCount) suggestedAlt = `Manual review needed: distinct image ${imageIndex + 1} on “${cleanText(h1s[0] || title)}”`;
     return {
       src, currentAlt, currentFilename,
-      issue: !currentAlt && unoptimized ? 'both' : !currentAlt ? 'missing_alt' : 'unoptimized_filename',
+      issue: missingAlt && unoptimized && legacyFormat ? 'multiple' : missingAlt && legacyFormat ? 'missing_alt_and_legacy_format' : unoptimized && legacyFormat ? 'filename_and_legacy_format' : missingAlt ? 'missing_alt' : legacyFormat ? 'legacy_format' : 'unoptimized_filename',
       suggestedAlt,
       suggestedFilename: opaqueCdnAsset ? 'CDN-managed — rename not applicable' : `${slug(`${primaryKeyword}-${subject}`) || 'descriptive-image'}${extension}`,
       basis: 'page_context'
@@ -285,10 +296,12 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   result.suggestedSchemas = suggestSchemas(result);
   if (!hasViewportMeta) result.findings.push({ category: 'seo', severity: 'warning', rule: 'viewport_missing', message: 'Viewport meta tag is missing; mobile rendering may be impaired.' });
   if (!htmlLang) result.findings.push({ category: 'seo', severity: 'info', rule: 'html_lang_missing', message: 'The HTML lang attribute is missing.' });
-  if (imageCount && imagesMissingAltText) result.findings.push({ category: 'seo', severity: 'warning', rule: 'image_alt_missing', message: `${imagesMissingAltText} of ${imageCount} images have empty or missing alt text; decorative images should use an intentional empty alt attribute.` });
+  if (imageCount && imagesMissingAltText) { const missingImages = images.filter(image => image.altStatus === 'missing_attribute'); result.findings.push({ category: 'seo', severity: 'warning', rule: 'image_alt_missing', message: `${imagesMissingAltText} of ${imageCount} images are missing the alt attribute. Intentional alt="" values are treated as decorative and are not counted.`, evidence: missingImages.map(image => image.src).join(' | ') }); }
+  const legacyImages = images.filter(image => image.nextGeneration === false && image.format !== 'unknown');
+  if (legacyImages.length) result.findings.push({ category: 'seo', severity: 'info', rule: 'image_legacy_format', message: `${legacyImages.length} of ${imageCount} images use a legacy format instead of WebP or AVIF.`, evidence: legacyImages.map(image => `${image.src} (${image.format})`).join(' | ') });
   if (canonical && !equivalentUrl(canonical, finalUrl)) result.findings.push({ category: 'seo', severity: 'info', rule: 'canonical_differs', message: `Canonical points to a materially different URL: ${canonical}` });
   if (archiveTypes.has(pageType) && indexable) result.findings.push({ category: 'seo', severity: pageType === 'search_archive' ? 'warning' : 'info', rule: 'indexable_archive_review', message: `Indexable ${pageType.replaceAll('_', ' ')} confirmed: HTTP ${status}, no noindex directive detected${canonical ? `, and canonical ${equivalentUrl(canonical, finalUrl) ? 'is self-referencing' : `points to ${canonical}`}` : ', with no canonical declared'}. Review whether search indexing, pagination, and listing quality are intentional.`, evidence: `robots directives: ${robotsDirectives.length ? robotsDirectives.join(', ') : 'none detected'}; indexable: yes` });
-  for (let index = 1; index < headings.length; index++) if (headings[index].level > headings[index - 1].level + 1) { result.findings.push({ category: 'seo', severity: 'warning', rule: 'heading_hierarchy_skipped', message: `Heading hierarchy skips from H${headings[index - 1].level} to H${headings[index].level}.`, evidence: `${headings[index - 1].text} → ${headings[index].text}` }); break; }
+  for (let index = 1; index < headings.length; index++) if (headings[index].level > headings[index - 1].level + 1) result.findings.push({ category: 'seo', severity: 'warning', rule: 'heading_hierarchy_skipped', message: `Heading hierarchy skips from H${headings[index - 1].level} to H${headings[index].level}.`, evidence: `${headings[index - 1].text} → ${headings[index].text}` });
   if (mixedContentResources.length) result.findings.push({ category: 'seo', severity: 'warning', rule: 'mixed_content', message: `${mixedContentResources.length} insecure HTTP resource${mixedContentResources.length === 1 ? '' : 's'} load on this HTTPS page.`, evidence: mixedContentResources.slice(0, 10).join(' | ') });
   if (contentAgeDays !== null && contentAgeDays > 730) result.findings.push({ category: 'geo', severity: 'warning', rule: 'content_stale', message: `The best available content date is ${contentAgeDays} days old; verify accuracy and update stale material.`, evidence: contentDate ?? undefined });
   else if (contentAgeDays !== null && contentAgeDays > 365) result.findings.push({ category: 'geo', severity: 'info', rule: 'content_aging', message: `The best available content date is ${contentAgeDays} days old.`, evidence: contentDate ?? undefined });

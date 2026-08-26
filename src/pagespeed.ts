@@ -18,7 +18,9 @@ export function parsePageSpeedResponse(data: any): PageSpeedResult {
   for (const [name, id] of Object.entries({ lcp: 'largest-contentful-paint', cls: 'cumulative-layout-shift', tbt: 'total-blocking-time', fcp: 'first-contentful-paint', speedIndex: 'speed-index' })) {
     result.metrics[name] = audits[id]?.numericValue ?? null;
   }
-  const field = data.loadingExperience?.metrics ?? {};
+  const urlField = data.loadingExperience?.metrics, originField = data.originLoadingExperience?.metrics;
+  const field = Object.keys(urlField ?? {}).length ? urlField : (originField ?? {});
+  result.fieldDataScope = Object.keys(urlField ?? {}).length ? 'url' : Object.keys(originField ?? {}).length ? 'origin' : 'unavailable';
   for (const [name, id] of Object.entries({ lcp: 'LARGEST_CONTENTFUL_PAINT_MS', cls: 'CUMULATIVE_LAYOUT_SHIFT_SCORE', inp: 'INTERACTION_TO_NEXT_PAINT', fcp: 'FIRST_CONTENTFUL_PAINT_MS' })) {
     const metric = field[id];
     result.fieldMetrics![name] = { percentile: metric?.percentile ?? null, category: metric?.category ?? null };

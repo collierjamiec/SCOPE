@@ -10,6 +10,8 @@ const fixes: Record<string, { effort: 'low' | 'medium' | 'high'; recommendation:
   schema_missing: { effort: 'medium', recommendation: 'Add page-appropriate JSON-LD that accurately represents the visible content and primary entity.' },
   schema_invalid_json: { effort: 'low', recommendation: 'Correct the reported JSON syntax errors, then validate each affected block with Schema.org or Google’s rich-results tooling.' },
   image_alt_missing: { effort: 'medium', recommendation: 'Review the listed images and add distinct descriptive alt attributes to informative images; retain intentional empty alt attributes only for decorative images.' },
+  image_legacy_format: { effort: 'medium', recommendation: 'Convert the exact listed legacy-format images to WebP or AVIF, preserve suitable quality, update references, and retain the originals only when a compatibility fallback is necessary.' },
+  near_duplicate_content: { effort: 'medium', recommendation: 'Review only the directly matched page pairs listed in the evidence. Consolidate pages only when they serve the same intent; otherwise strengthen their distinct purpose, copy, titles, and internal-link context.' },
   canonical_missing: { effort: 'low', recommendation: 'Add a self-referencing canonical to each canonical indexable page.' },
   canonical_differs: { effort: 'medium', recommendation: 'Verify that each differing canonical intentionally consolidates the page; correct accidental cross-page canonicalization.' },
   indexable_archive_review: { effort: 'low', recommendation: 'These archives are currently indexable. Keep them indexable only when they provide a useful, unique listing experience; otherwise apply noindex,follow deliberately and keep their links crawlable.' },
@@ -30,6 +32,7 @@ const fallbackRecommendation = (rule: string, count: number) => {
 export function buildPriorities(pages: PageResult[]) {
   const groups = new Map<string, { area: string; issue: string; severity: string; pages: Set<string> }>();
   for (const page of pages) for (const finding of page.findings) {
+    if (finding.rule === 'archive_template_similarity') continue;
     const key = finding.rule || finding.message;
     const group = groups.get(key) ?? { area: finding.category.toUpperCase(), issue: finding.message, severity: finding.severity, pages: new Set<string>() };
     group.pages.add(page.url); groups.set(key, group);

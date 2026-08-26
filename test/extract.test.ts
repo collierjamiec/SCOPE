@@ -16,10 +16,24 @@ test('suggests alt text and filenames for images that need optimization', () => 
   const html = '<title>Virtual Receptionist Service</title><main><h1>Virtual Receptionist Service</h1><figure><img src="/IMG_1234.jpg" alt=""><figcaption>Receptionist answering a customer call</figcaption></figure></main>';
   const result = extractPage('https://example.test/', 'https://example.test/', 200, 'text/html', html, new Headers());
   assert.equal(result.imageRecommendations.length, 1);
-  assert.equal(result.imageRecommendations[0].issue, 'both');
+  assert.equal(result.imageRecommendations[0].issue, 'filename_and_legacy_format');
   assert.match(result.imageRecommendations[0].suggestedFilename, /virtual-receptionist/);
   assert.match(result.imageRecommendations[0].suggestedAlt, /Receptionist answering a customer call/);
   assert.equal(result.imageRecommendations[0].basis, 'page_context');
+});
+
+test('keeps shared-component heading defects and distinguishes decorative alt text', () => {
+  const html = '<body><main><h1>Article title</h1><h2>Article section</h2><img src="/decorative.webp" alt=""></main><section class="related"><h6>Shared related-content heading</h6></section></body>';
+  const result = extractPage('https://example.test/post', 'https://example.test/post', 200, 'text/html', html, new Headers());
+  assert.ok(result.findings.some(finding => finding.rule === 'heading_hierarchy_skipped' && /Shared related-content heading/.test(finding.evidence ?? '')));
+  assert.equal(result.images[0]?.altStatus, 'intentional_empty');
+  assert.ok(!result.findings.some(finding => finding.rule === 'image_alt_missing'));
+});
+
+test('reports the exact image URL when alt text is missing and flags legacy formats', () => {
+  const result = extractPage('https://example.test/post', 'https://example.test/post', 200, 'text/html', '<main><h1>Post</h1><img src="/specific-photo.jpg"></main>', new Headers());
+  assert.match(result.findings.find(finding => finding.rule === 'image_alt_missing')?.evidence ?? '', /specific-photo\.jpg/);
+  assert.match(result.findings.find(finding => finding.rule === 'image_legacy_format')?.evidence ?? '', /specific-photo\.jpg \(jpg\)/);
 });
 
 test('does not mistake an opaque CDN asset identifier for a renameable filename', () => {

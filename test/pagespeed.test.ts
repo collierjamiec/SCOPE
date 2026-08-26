@@ -29,6 +29,13 @@ test('captures Lighthouse scores, lab metrics, and available field data', () => 
   assert.deepEqual(result.fieldMetrics?.lcp, { percentile: 2300, category: 'FAST' });
   assert.deepEqual(result.fieldMetrics?.inp, { percentile: 190, category: 'FAST' });
   assert.deepEqual(result.fieldMetrics?.fcp, { percentile: null, category: null });
+  assert.equal(result.fieldDataScope, 'url');
+});
+
+test('falls back to origin-level CrUX field data when the URL has insufficient samples', () => {
+  const result = parsePageSpeedResponse({ lighthouseResult: { categories: {}, audits: {} }, loadingExperience: { metrics: {} }, originLoadingExperience: { metrics: { LARGEST_CONTENTFUL_PAINT_MS: { percentile: 2800, category: 'AVERAGE' } } } });
+  assert.equal(result.fieldDataScope, 'origin');
+  assert.deepEqual(result.fieldMetrics?.lcp, { percentile: 2800, category: 'AVERAGE' });
 });
 
 test('retries PageSpeed 429 responses using Retry-After and returns a classified quota error', async () => {

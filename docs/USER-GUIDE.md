@@ -11,14 +11,14 @@ This guide is for people who want a useful audit without needing to understand t
 
 **Full Audit** is exhaustive, fast, and enables every analysis module. It does not follow links onto external websites; it checks directly linked external destinations for valid responses. Use a Custom audit only when you intentionally want bounded external crawling.
 
-During the run, the **Start audit** control is disabled and labeled **Audit running…** so a second launch cannot interrupt the active audit. It becomes available again only after the run completes, fails, or is cancelled without a report. Watch crawlable URLs discovered, URLs fetched, pages analyzed, findings by severity, a real-time elapsed clock, throughput, ETA, and the current URL. Counters are monotonic in the interface, so a late progress event cannot make completed work appear to move backward. When crawling ends, SCOPE changes the phase to PageSpeed, analysis, or report generation and shows measurements for that phase rather than mislabeling a fixed page count as crawl speed. **Stop & create partial report** aborts active PageSpeed requests/retry waits and proceeds to final analysis and report generation; **Cancel without report** stops without creating files. PDF conversion has a 90-second safety timeout: if LibreOffice fails or hangs, SCOPE completes the dashboard and DOCX, explains that the PDF is unavailable, and records the failure in diagnostics.
+During the run, the **Start audit** control is disabled and labeled **Audit running…** so a second launch cannot interrupt the active audit. It becomes available again only after the run completes, fails, or is cancelled without a report. Watch crawlable URLs discovered, URLs fetched, pages analyzed, findings by severity, a real-time elapsed clock, throughput, ETA, and the current URL. Counters are monotonic in the interface, so a late progress event cannot make completed work appear to move backward. When crawling ends, SCOPE changes the phase to PageSpeed, analysis, or report generation and shows measurements for that phase rather than mislabeling a fixed page count as crawl speed. **Stop & create partial report** aborts active PageSpeed requests/retry waits and proceeds to final analysis and report generation; **Cancel without report** stops without creating files. The dashboard and DOCX finish before PDF conversion. Choose **Download full PDF** to open an on-demand progress page; conversion runs in the background, shows live elapsed time, downloads when ready, and stops with an actionable diagnostic after ten minutes rather than blocking the audit.
 
 ## Choose modules
 
 - **Technical:** statuses, meaningful redirects, broken links, canonicals, indexability, robots, sitemaps, crawl depth, and internal architecture.
 - **Content:** titles, descriptions, headings, word/readability measurements, CTAs, freshness, duplicate and near-duplicate signals.
 - **Schema:** JSON-LD parsing, types, property-level problems, and page-specific suggestions supported by visible content.
-- **Images:** exhaustive inventory, alt text, opaque/CDN identifiers, filenames, repeated use, and context-based suggestions.
+- **Images:** exhaustive inventory, exact image URLs, descriptive/missing/intentional-empty alt status, opaque/CDN identifiers, repeated use, current format, WebP/AVIF status, and context-based filename/alt suggestions.
 - **PageSpeed:** mobile Lighthouse and available field data. This adds time and may use Google quota. Its live phase reports completed tests, eligible pages, remaining tests, percentage, and a phase-specific ETA. **Parallel PageSpeed tests** controls how many independent URL requests SCOPE permits in flight: 5 is the recommended default, 10 is faster, and 25 is aggressive and can consume quota quickly. Google does not offer a multi-URL PageSpeed endpoint, so this is bounded parallelism rather than one batch request. Enable **Skip PageSpeed tests on category and tag archives** to retain those pages in the SEO audit without spending a Lighthouse request on each archive listing.
 - **Keywords:** inferred on-page targets, GSC-observed queries, licensed SERP positions when configured, and cannibalization.
 - **AIO/AEO/GEO:** answer readiness, evidence, entities, direct answers, definitions, comparisons, numerical specificity, source provenance, freshness, visuals, and AI crawler access.
@@ -53,9 +53,9 @@ Always select the provider, target, market, and exact dates. Provider traffic, r
 
 - **Executive:** overall health, severity mix, evidence coverage, and a written summary without repeating every table.
 - **Priorities:** grouped actions with affected-page drilldowns.
-- **Pages/Content/Technical/Images/PageSpeed:** page-level evidence. Sort and filter columns where meaningful.
+- **Pages/Content/Technical/Images/PageSpeed:** page-level evidence. Sort and filter columns where meaningful. Shared heading/template defects remain recorded, but Findings consolidates identical rules into one summary with an occurrence count and expandable evidence/page lists.
 - **Keywords/GSC/GA4:** source-labeled, date-labeled search and analytics evidence.
-- **Cannibalization:** the competing pages, why the overlap was flagged, impression/click/position evidence when available, and the specific pages to compare.
+- **Cannibalization:** one row per query or inferred intent cluster, with every competing page, why the overlap was flagged, and impression/click/position or inferred targeting evidence inside that consolidated row.
 - **AIO:** answer-readiness dimensions, advanced evidence, and exact opportunities.
 - **Findings:** Critical, Warning, and Info in that default order with filters and definitions.
 

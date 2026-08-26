@@ -66,7 +66,7 @@ export interface ImageRecommendation {
   src: string;
   currentAlt: string;
   currentFilename: string;
-  issue: "missing_alt" | "unoptimized_filename" | "both";
+  issue: "missing_alt" | "unoptimized_filename" | "legacy_format" | "missing_alt_and_legacy_format" | "filename_and_legacy_format" | "multiple";
   suggestedAlt: string;
   suggestedFilename: string;
   basis: "vision" | "page_context";
@@ -76,7 +76,10 @@ export interface ImageRecommendation {
 export interface ImageInventoryItem {
   src: string;
   alt: string;
+  altStatus?: "descriptive" | "intentional_empty" | "missing_attribute";
   filename: string;
+  format?: string;
+  nextGeneration?: boolean;
   cdnManaged: boolean;
 }
 
@@ -149,6 +152,7 @@ export interface PageSpeedResult {
   seo: number | null;
   metrics: Record<string, number | null>;
   fieldMetrics?: Record<string, { percentile: number | null; category: string | null }>;
+  fieldDataScope?: "url" | "origin" | "unavailable";
   error?: string;
   errorCode?: "rate_limited" | "http_error" | "network_error" | "skipped_after_rate_limit";
 }

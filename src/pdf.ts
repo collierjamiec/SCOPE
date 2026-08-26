@@ -2,7 +2,7 @@ import { mkdir, rename } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 
-export async function convertDocxToPdf(docxPath: string, pdfPath: string, timeoutMs = 90_000): Promise<void> {
+export async function convertDocxToPdf(docxPath: string, pdfPath: string, timeoutMs = 10 * 60_000): Promise<void> {
   await mkdir(dirname(pdfPath), { recursive: true });
   const profile = join(dirname(pdfPath), `.lo-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(profile, { recursive: true });
