@@ -320,11 +320,27 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   ));
 
   children.push(heading('Keyword cannibalization', 1));
+  const cannibalizationPeriod = report.importedData.gscDateRange
+    ? (report.importedData.gscDateRange.start && report.importedData.gscDateRange.end
+      ? `${report.importedData.gscDateRange.start} through ${report.importedData.gscDateRange.end}`
+      : report.importedData.gscDateRange.label)
+    : 'reporting period unavailable';
+  children.push(body(`Observed issues use exact GSC query-to-page evidence for ${cannibalizationPeriod}; inferred issues use overlapping on-page title, heading, metadata, and body signals. Every URL below is included so the preferred page and consolidation, differentiation, canonicalization, or internal-linking actions can be reviewed directly.`));
   if (!report.cannibalization.length) children.push(body('No overlapping on-page targeting met the cannibalization threshold.'));
   for (const issue of report.cannibalization) {
     children.push(heading(`${issue.severity.toUpperCase()}: ${issue.keyword}`, 2));
     children.push(body(issue.reason));
-    for (const page of issue.pages) children.push(bullet(`${page.url} — ${page.impressions === undefined ? `inferred targeting score ${page.score}` : `${page.clicks ?? 0} clicks, ${page.impressions} impressions, average position ${page.position?.toFixed(1) ?? 'unavailable'}`}`));
+    const totalImpressions = issue.pages.reduce((sum, page) => sum + (page.impressions ?? 0), 0), strongestScore = issue.pages[0]?.score || 0;
+    for (const [index, page] of issue.pages.entries()) {
+      const others = issue.pages.filter(other => other.url !== page.url).map(other => other.url);
+      const assessment = index === 0
+        ? (page.impressions === undefined ? 'Strongest inferred target' : 'Strongest observed landing page')
+        : (page.impressions === undefined ? 'Overlapping inferred target' : 'Overlapping landing page');
+      const evidence = page.impressions === undefined
+        ? `targeting score ${page.score.toFixed(2)} (${strongestScore ? Math.round(page.score / strongestScore * 100) : 0}% of the strongest page), based on overlapping title, heading, metadata, or body signals`
+        : `${page.clicks ?? 0} clicks, ${page.impressions} impressions (${totalImpressions ? Math.round(page.impressions / totalImpressions * 100) : 0}% query impression share), average position ${page.position?.toFixed(1) ?? 'unavailable'}`;
+      children.push(bullet(`${assessment}: ${page.url} — ${evidence}. Competes with: ${others.join('; ') || 'no other retained URL'}.`));
+    }
   }
 
   children.push(heading('Page-by-page findings', 1));

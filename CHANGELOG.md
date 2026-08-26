@@ -6,7 +6,10 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
-- Redesigned the Cannibalization dashboard table to show SEO titles instead of long display URLs, retain linked URL tooltips, and provide page-specific leader/runner-up impression-share or inferred-targeting evidence on every row.
+- Added SE Ranking Positions Detailed, Positions History, Competitors Overall, and Share of Voice import support; detected competitor domains can be reviewed, added individually or in bulk, and launched into live audits while modeled provider evidence remains separate from GSC and GA4.
+- Expanded competitive landscape reporting with shared and competitor-only keywords, head-to-head ranking wins, Top-20 coverage, Share of Voice, and provider traffic forecasts.
+- Reworked cannibalization evidence to name every competing page, explain the exact observed or inferred reason, use SEO titles in the dashboard, and retain actionable full URLs in DOCX/PDF reports.
+- Redesigned the Cannibalization dashboard table to show SEO titles instead of long display URLs, retain linked URL tooltips, and provide page-specific strongest-page/overlap impression-share or inferred-targeting evidence on every row.
 - Fixed the inert settings gear caused by unescaped generated dashboard JavaScript; added regression coverage for accessible link labels and strengthened GSC query-to-page cannibalization using impression share and average-position proximity.
 - Competitor baseline launches now inherit the source domain's latest retained crawl and audit settings, disclose the source run/date, and intentionally exclude property-specific GSC and GA4 data.
 - Added separate Competitive Intelligence and AIO/AEO/GEO Intelligence dashboards with dated, provider-labeled CSV imports, same-provider trend signals, evidence-boundary disclosures, and viewport-clamped KPI tooltips.
