@@ -4,6 +4,7 @@ import { dirname, relative, resolve, sep } from 'node:path';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient, type ComparisonStatus, type DeltaState } from './generated/prisma/client.js';
 import { diagnoseTrafficChange } from './trend-diagnostics.js';
+import { parseIntelligenceCsv } from './intelligence-imports.js';
 import type { AuditReport, Finding, PageResult } from './types.js';
 
 const RULESET_VERSION = '2026-08-25';
@@ -61,6 +62,25 @@ export async function addDomainCompetitor(sourceDomainId: string, value: string)
 export async function removeDomainCompetitor(sourceDomainId: string, competitorId: string) {
   const result = await db().domainCompetitor.deleteMany({ where: { id: competitorId, sourceDomainId } });
   if (!result.count) throw new Error('Competitor definition was not found.');
+}
+
+export async function getLatestDomainAuditConfig(domainId: string) {
+  const run = await db().auditRun.findFirst({ where: { domainId }, orderBy: { generatedAt: 'desc' }, select: { id: true, generatedAt: true, normalizedDomain: true, configJson: true, reportJsonPath: true } });
+  if (!run) return null;
+  let config = run.configJson as Record<string, unknown>;
+  if (run.reportJsonPath) try { const saved = JSON.parse(await readFile(run.reportJsonPath, 'utf8')) as AuditReport; config = saved.config as unknown as Record<string, unknown>; } catch { /* The database snapshot remains a safe fallback. */ }
+  const allowed = ['maxPages','maxKeywords','maxRankings','concurrency','delayMs','pageSpeed','excludePaths','maxDepth','maxUrlsPerPath','stripTrackingParameters','renderJavaScript','sitemapOnly','excludeArchives','externalCrawlDepth','maxExternalPages','analyzeImages','reportBrokenLinks','analyzeSchema'];
+  return { sourceDomain: run.normalizedDomain, sourceRunId: run.id, generatedAt: run.generatedAt, config: Object.fromEntries(allowed.filter(key => config[key] !== undefined).map(key => [key, config[key]])) };
+}
+
+export async function listIntelligenceDatasets(domainId: string, datasetType: 'competitive_seo' | 'ai_visibility') {
+  return db().intelligenceDataset.findMany({ where: { domainId, datasetType }, orderBy: { importedAt: 'desc' } });
+}
+
+export async function importIntelligenceDataset(input: { domainId: string; targetDomain: string; provider: string; datasetType: 'competitive_seo' | 'ai_visibility'; reportStart?: string; reportEnd?: string; market?: string; fileName: string; csv: string }) {
+  const source = await db().domain.findUnique({ where: { id: input.domainId } }); if (!source) throw new Error('Source domain history was not found.');
+  const targetDomain = normalizeDomain(input.targetDomain), parsed = parseIntelligenceCsv(input.csv, input.datasetType);
+  return db().intelligenceDataset.create({ data: { domainId: input.domainId, targetDomain, provider: input.provider.slice(0, 40), datasetType: input.datasetType, reportStart: input.reportStart ? new Date(`${input.reportStart}T00:00:00Z`) : null, reportEnd: input.reportEnd ? new Date(`${input.reportEnd}T00:00:00Z`) : null, market: input.market?.slice(0, 80) || null, fileName: input.fileName.slice(0, 255), rowCount: parsed.rows.length, metricsJson: json(parsed.metrics), rowsJson: json(parsed.rows) } });
 }
 
 export function normalizePageUrl(value: string): string {

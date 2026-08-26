@@ -35,6 +35,26 @@ model Domain {
   sourceMerges     DomainMerge[] @relation("MergeSource")
   targetMerges     DomainMerge[] @relation("MergeTarget")
   competitors      DomainCompetitor[]
+  intelligenceDatasets IntelligenceDataset[]
+}
+
+model IntelligenceDataset {
+  id               String   @id @default(cuid())
+  domainId         String
+  targetDomain     String   @db.VarChar(255)
+  provider         String   @db.VarChar(40)
+  datasetType      String   @db.VarChar(30)
+  reportStart      DateTime?
+  reportEnd        DateTime?
+  market           String?  @db.VarChar(80)
+  fileName         String   @db.VarChar(255)
+  rowCount         Int
+  metricsJson      Json
+  rowsJson         Json
+  importedAt       DateTime @default(now())
+  domain           Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  @@index([domainId, datasetType, importedAt])
+  @@index([targetDomain])
 }
 
 model DomainCompetitor {

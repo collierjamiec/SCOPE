@@ -273,7 +273,11 @@ The adapter receives `imageUrl`, `pageUrl`, `pageTitle`, `primaryKeywords`, and 
 
 The Trends dashboard includes source/date tooltips, an evidence-bounded traffic-change diagnosis, recurring-issue quick wins, and a historical executive summary. It distinguishes ranking loss, CTR loss, analytics divergence, and possible demand decline without claiming seasonality, algorithm changes, or competitor activity without evidence.
 
-Use **Trends → Competitors** to define competitor domains and launch a public SCOPE crawl against them. Directly observed crawl measurements, first-party GSC/GA4 measurements, and optional third-party modeled estimates are separate evidence classes. Competitor sessions, users, and traffic must be labeled as estimates and are never blended with first-party GA4 totals.
+Use the dedicated **Competitive intelligence** dashboard to define competitor domains, launch public SCOPE crawls, and import provider evidence. Directly observed crawl measurements, first-party GSC/GA4 measurements, and optional third-party modeled estimates are separate evidence classes. Competitor sessions, users, and traffic must be labeled as estimates and are never blended with first-party GA4 totals.
+
+Competitive intelligence now has its own `/competitive` dashboard, while crawl history remains at `/trends`. Competitor baseline launches inherit the source domain's latest crawl and audit settings but intentionally exclude source-domain GSC and GA4 data. Provider CSV imports retain provider, target, market, reporting period, original filename, normalized metrics, and rows.
+
+AIO/AEO/GEO intelligence has its own `/ai-intelligence` dashboard. It separates SCOPE answer-readiness signals from externally observed prompts, mentions, citations, platforms/models, sentiment, and provider visibility/share-of-voice exports. Third-party methodologies are not assumed to be interchangeable or equivalent to Google first-party data.
 
 ## License
 

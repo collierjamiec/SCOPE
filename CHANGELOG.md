@@ -6,6 +6,8 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Competitor baseline launches now inherit the source domain's latest retained crawl and audit settings, disclose the source run/date, and intentionally exclude property-specific GSC and GA4 data.
+- Added separate Competitive Intelligence and AIO/AEO/GEO Intelligence dashboards with dated, provider-labeled CSV imports, same-provider trend signals, evidence-boundary disclosures, and viewport-clamped KPI tooltips.
 - Replaced browser-native KPI title hints with visible, accessible hover/focus tooltips on current-audit and historical Trends dashboards.
 - Treat canonical URLs that differ only by a trailing slash as equivalent, explicitly disclose archive HTTP/robots/canonical evidence, and keep widespread informational archive reviews from being mislabeled high-impact.
 - Added an explicit Potential keywords KPI and keyword-evidence narrative to audit executive summaries, separating observed GSC/SERP keywords from context-inferred targets and disclosing average/range heuristic confidence in both dashboard and document reports.
