@@ -19,6 +19,13 @@ export interface GoogleAnalyticsProperty {
   propertyType?: string;
 }
 
+export interface GoogleAnalyticsPropertyRecovery {
+  code: 'analytics_admin_api_disabled' | 'property_access_denied' | 'property_discovery_failed';
+  message: string;
+  actionLabel?: string;
+  actionUrl?: string;
+}
+
 export interface GoogleAnalyticsReportOptions {
   property: string;
   startDate: string;
@@ -129,7 +136,7 @@ export async function listGoogleAnalyticsProperties(credentials: GoogleAnalytics
   const fetchFn = options.fetchFn ?? fetch, token = await accessToken(credentials, fetchFn), properties: GoogleAnalyticsProperty[] = [];
   let pageToken = '';
   do {
-    const endpoint = new URL('https://analyticsadmin.googleapis.com/v1alpha/accountSummaries');
+    const endpoint = new URL('https://analyticsadmin.googleapis.com/v1beta/accountSummaries');
     endpoint.searchParams.set('pageSize', '200');
     if (pageToken) endpoint.searchParams.set('pageToken', pageToken);
     const data = await googleJson(endpoint.href, token, {}, options);
@@ -139,6 +146,26 @@ export async function listGoogleAnalyticsProperties(credentials: GoogleAnalytics
     pageToken = String(data.nextPageToken ?? '');
   } while (pageToken);
   return properties.sort((a, b) => a.accountDisplayName.localeCompare(b.accountDisplayName) || a.displayName.localeCompare(b.displayName));
+}
+
+export function googleAnalyticsPropertyRecovery(error: string | undefined): GoogleAnalyticsPropertyRecovery | undefined {
+  if (!error) return undefined;
+  const actionUrl = error.match(/https:\/\/console\.developers\.google\.com\/apis\/api\/analyticsadmin\.googleapis\.com\/overview\?project=\d+/)?.[0]
+    ?? 'https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com';
+  if (/analyticsadmin\.googleapis\.com/i.test(error) && /(disabled|has not been used)/i.test(error)) return {
+    code: 'analytics_admin_api_disabled',
+    message: 'Your Google account is connected, but SCOPE cannot list GA4 properties until the Google Analytics Admin API is enabled for this OAuth project.',
+    actionLabel: 'Enable Google Analytics Admin API',
+    actionUrl
+  };
+  if (/permission|forbidden|insufficient/i.test(error)) return {
+    code: 'property_access_denied',
+    message: 'Your Google account is connected, but it cannot list GA4 properties. Confirm that this account has at least Viewer access to the intended GA4 property.'
+  };
+  return {
+    code: 'property_discovery_failed',
+    message: 'Your Google account is connected, but SCOPE could not load its GA4 properties. Retry property discovery or reconnect the account.'
+  };
 }
 
 const csv = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;

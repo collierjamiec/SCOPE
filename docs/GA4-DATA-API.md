@@ -29,6 +29,8 @@ SCOPE records Google’s property time zone and whether the response reports pri
 8. Complete Google’s authorization window, then return to SCOPE. Select the correct GA4 property and reporting period.
 9. Keep **Use GA4 Data API data for this audit** selected and start the audit.
 
+SCOPE treats OAuth and property discovery as two separate states. **Connected · Action required** means Google accepted the account and SCOPE saved the refresh token, but the Admin API could not yet list properties. It does not mean the login failed. Use the displayed **Enable Google Analytics Admin API** link, wait a few minutes for Google’s change to propagate, then choose **Retry property access**—you do not need to paste the client credentials or authorize the account again.
+
 ## Security and account switching
 
 The GA4 OAuth client and refresh token are stored in `.scope/google-analytics.json` by default with owner-only file permissions. Packaged installations should set `SCOPE_DATA_DIR` to an operating-system application-data directory; an exact path can be supplied with `SCOPE_GOOGLE_ANALYTICS_CREDENTIALS_FILE`.
@@ -56,7 +58,8 @@ When both are selected, direct API data takes precedence for that audit. CSV fil
 
 ## Troubleshooting
 
-- **No properties appear:** confirm the connected Google account has at least Viewer access in GA4 and that the Google Analytics Admin API is enabled in the OAuth client’s Cloud project.
+- **Connected, but “Action required” appears:** OAuth succeeded. Follow SCOPE’s direct Google Cloud link to enable the Google Analytics Admin API for the OAuth client’s project, wait a few minutes, and select **Retry property access**.
+- **Connected, but no properties appear:** confirm the connected Google account has at least Viewer access in GA4. Property access belongs to the Google account, not merely the OAuth project.
 - **Access blocked or app not verified:** add the account as an OAuth test user or complete the consent-screen configuration appropriate to the installation.
 - **No refresh token returned:** disconnect, reconnect, and approve offline access. SCOPE requests account selection and consent on every reconnect.
 - **HTTP 403:** verify both APIs are enabled and the account can view the selected property.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createGoogleAnalyticsAuthorization, fetchGoogleAnalyticsLandingPages, googleAnalyticsCredentialPath, listGoogleAnalyticsProperties, saveGoogleAnalyticsCredentials } from '../src/google-analytics.js';
+import { createGoogleAnalyticsAuthorization, fetchGoogleAnalyticsLandingPages, googleAnalyticsCredentialPath, googleAnalyticsPropertyRecovery, listGoogleAnalyticsProperties, saveGoogleAnalyticsCredentials } from '../src/google-analytics.js';
 
 test('creates a read-only GA4 OAuth authorization with PKCE', () => {
   const authorization = createGoogleAnalyticsAuthorization('client.apps.googleusercontent.com', 'http://127.0.0.1:4173/api/google-analytics/callback', 'state-123');
@@ -37,8 +37,16 @@ test('lists accessible GA4 properties across account-summary pages', async () =>
   }) as typeof fetch;
   const properties = await listGoogleAnalyticsProperties({ clientId: 'client.apps.googleusercontent.com', refreshToken: 'refresh' }, { fetchFn });
   assert.deepEqual(properties.map(item => item.property), ['properties/11', 'properties/22']);
-  assert.ok(calls.some(url => url.includes('analyticsadmin.googleapis.com/v1alpha/accountSummaries')));
+  assert.ok(calls.some(url => url.includes('analyticsadmin.googleapis.com/v1beta/accountSummaries')));
   assert.ok(calls.some(url => url.includes('pageToken=next')));
+});
+
+test('turns a disabled Analytics Admin API response into an actionable recovery state', () => {
+  const recovery = googleAnalyticsPropertyRecovery('Google Analytics Data API request failed (HTTP 403): Google Analytics Admin API has not been used before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/analyticsadmin.googleapis.com/overview?project=123456 then retry.');
+  assert.equal(recovery?.code, 'analytics_admin_api_disabled');
+  assert.equal(recovery?.actionLabel, 'Enable Google Analytics Admin API');
+  assert.equal(recovery?.actionUrl, 'https://console.developers.google.com/apis/api/analyticsadmin.googleapis.com/overview?project=123456');
+  assert.match(recovery?.message ?? '', /account is connected/i);
 });
 
 test('queries GA4 landing pages, retries a 429, and preserves aggregate totals and quality metadata', async () => {
