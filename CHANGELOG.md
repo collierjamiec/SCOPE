@@ -6,6 +6,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Added an explicit Potential keywords KPI and keyword-evidence narrative to audit executive summaries, separating observed GSC/SERP keywords from context-inferred targets and disclosing average/range heuristic confidence in both dashboard and document reports.
 - Added historical traffic diagnostics and an executive summary covering direction, evidence, recurring issues, quick wins, and deeper SEO/AIO business guidance.
 - Added competitor-domain configuration, audit launching, and audited-history status while keeping public crawl observations, first-party analytics, and modeled traffic estimates distinct.
 - Retained GSC and GA4 traffic measurements at run and page level for longitudinal comparisons.

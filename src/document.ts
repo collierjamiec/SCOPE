@@ -188,7 +188,12 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
   const now = new Date(report.generatedAt);
   const critical = report.pages.flatMap(page => page.findings).filter(finding => finding.severity === 'critical').length;
   const warnings = report.pages.flatMap(page => page.findings).filter(finding => finding.severity === 'warning').length;
-  const ranked = report.keywords.filter(keyword => keyword.ranking).length;
+  const observedKeywords = report.keywords.filter(keyword => keyword.searchConsole || keyword.ranking);
+  const inferredKeywords = report.keywords.filter(keyword => !keyword.searchConsole && !keyword.ranking);
+  const inferredConfidence = inferredKeywords.map(keyword => Math.round(keyword.confidence * 100));
+  const averageInferredConfidence = inferredConfidence.length ? Math.round(inferredConfidence.reduce((sum, value) => sum + value, 0) / inferredConfidence.length) : null;
+  const inferredConfidenceRange = inferredConfidence.length ? `${Math.min(...inferredConfidence)}–${Math.max(...inferredConfidence)}%` : 'not applicable';
+  const ranked = observedKeywords.length;
   const duplicateGroups = (values: string[]) => {
     const counts = new Map<string, number>();
     for (const value of values.filter(Boolean)) counts.set(value.toLowerCase(), (counts.get(value.toLowerCase()) ?? 0) + 1);
@@ -211,7 +216,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
     body(dateLabel(now), { boldLabel: 'Audit date' }),
     body('Search & Content Optimization Performance Engine — created by Jamie C. Collier', { boldLabel: 'SCOPE' }),
     body(`${report.summary.indexablePagesAnalyzed} indexable pages analyzed; ${report.summary.excludedNonIndexable} URLs excluded`, { boldLabel: 'Scope' }),
-    body(ranked ? `${ranked} keyword rankings returned by the configured provider` : 'No licensed SERP provider configured; rankings are unavailable', { boldLabel: 'Ranking coverage' }),
+    body(ranked ? `${ranked} keywords have observed GSC or licensed SERP evidence; ${inferredKeywords.length} additional targets are inferred` : `No observed GSC or licensed SERP ranking evidence; ${inferredKeywords.length} potential keyword targets are inferred from on-page context`, { boldLabel: 'Keyword evidence' }),
     new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, color: BLUE, size: 12, space: 1 } }, spacing: { after: 260 } }),
     heading('Executive summary', 1),
     dataTable(
@@ -219,6 +224,7 @@ export async function createAuditDocument(report: AuditReport): Promise<Buffer> 
       [[report.summary.indexablePagesAnalyzed, report.summary.keywordsIdentified, critical, warnings, report.cannibalization.length]],
       [1900, 1800, 1700, 1700, 2260]
     ),
+    body(inferredKeywords.length ? `SCOPE inferred ${inferredKeywords.length} potential keyword targets from titles, metadata, headings, body content, repetition, and page-topic alignment. Average heuristic confidence: ${averageInferredConfidence}% (range ${inferredConfidenceRange}). Confidence measures the strength and consistency of these context clues; it is not a statistical probability that the domain currently ranks.` : 'No inferred keyword targets met the configured evidence threshold.'),
     body(`${report.partial ? 'PARTIAL REPORT: The crawl was cancelled by the user; findings cover only pages completed before cancellation. ' : ''}This report separates observed crawl evidence from inferred keyword relevance. When no SERP provider is configured, keyword positions remain unavailable and cannibalization flags indicate overlapping on-page targeting rather than proven ranking overlap.`),
     body(`Imported data: ${report.importedData.gscRows} GSC row(s) and ${report.importedData.ga4Rows} GA4 row(s).${report.importedData.gscAveragePosition !== undefined ? ` Impression-weighted average GSC position: ${report.importedData.gscAveragePosition.toFixed(1)}.` : ''}${report.importedData.gscProperty ? ` Search Console property: ${report.importedData.gscProperty}.` : ''} GSC reporting period: ${periodText(report.importedData.gscDateRange, 'unavailable')}. GA4 reporting period: ${periodText(report.importedData.ga4DateRange, 'unavailable')}. Uploaded exports are processed locally; Google credentials and tokens are never retained in report configuration or output files.`),
     heading('Prioritized action roadmap', 1),
