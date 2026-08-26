@@ -9,6 +9,8 @@ export interface AuditConfig {
   delayMs: number;
   userAgent: string;
   pageSpeed: boolean;
+  /** Do not spend PageSpeed quota on category and tag archive listings. */
+  pageSpeedSkipArchives?: boolean;
   pageSpeedApiKey?: string;
   serp?: SerpConfig;
   imageAnalysis?: ImageAnalysisConfig;

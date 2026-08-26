@@ -26,7 +26,7 @@ export function parsePageSpeedResponse(data: any): PageSpeedResult {
   return result;
 }
 
-type PageSpeedFetchOptions = { maxRetries?: number; sleep?: (milliseconds: number) => Promise<void> };
+type PageSpeedFetchOptions = { maxRetries?: number; sleep?: (milliseconds: number) => Promise<void>; signal?: AbortSignal };
 
 const retryDelay = (response: Response, attempt: number): number => {
   const header = response.headers.get('retry-after');
@@ -47,10 +47,15 @@ export async function fetchPageSpeed(url: string, apiKey?: string, options: Page
     if (apiKey) endpoint.searchParams.set('key', apiKey);
     const maximumRetries = options.maxRetries ?? 3, sleep = options.sleep ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)));
     for (let attempt = 0; ; attempt += 1) {
-      const response = await fetch(endpoint);
+      if (options.signal?.aborted) throw new DOMException('PageSpeed request cancelled', 'AbortError');
+      const response = await fetch(endpoint, { signal: options.signal });
       if (response.ok) { result = parsePageSpeedResponse(await response.json()); break; }
       const retryable = response.status === 429 || [500, 502, 503, 504].includes(response.status);
-      if (retryable && attempt < maximumRetries) { await sleep(retryDelay(response, attempt)); continue; }
+      if (retryable && attempt < maximumRetries) {
+        await Promise.race([sleep(retryDelay(response, attempt)), new Promise<void>(resolve => options.signal?.addEventListener('abort', () => resolve(), { once: true }))]);
+        if (options.signal?.aborted) throw new DOMException('PageSpeed request cancelled', 'AbortError');
+        continue;
+      }
       if (response.status === 429) {
         result.errorCode = 'rate_limited';
         result.error = `Google PageSpeed quota or rate limit was exhausted (HTTP 429) after ${attempt + 1} attempt(s). Verify PAGESPEED_API_KEY quota or retry the audit later.`;

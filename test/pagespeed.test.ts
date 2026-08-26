@@ -42,3 +42,15 @@ test('retries PageSpeed 429 responses using Retry-After and returns a classified
     assert.match(result.error ?? '', /HTTP 429/);
   } finally { globalThis.fetch = original; }
 });
+
+test('does not start a PageSpeed request after an audit is cancelled', async () => {
+  const original = globalThis.fetch; let calls = 0;
+  globalThis.fetch = (async () => { calls += 1; return new Response('{}'); }) as typeof fetch;
+  const controller = new AbortController(); controller.abort();
+  try {
+    const result = await fetchPageSpeed('https://example.com/', undefined, { signal: controller.signal });
+    assert.equal(calls, 0);
+    assert.equal(result.errorCode, 'network_error');
+    assert.match(result.error ?? '', /cancelled/i);
+  } finally { globalThis.fetch = original; }
+});

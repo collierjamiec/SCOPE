@@ -11,7 +11,7 @@ This guide is for people who want a useful audit without needing to understand t
 
 **Full Audit** is exhaustive, fast, and enables every analysis module. It does not follow links onto external websites; it checks directly linked external destinations for valid responses. Use a Custom audit only when you intentionally want bounded external crawling.
 
-During the run, watch URLs discovered/fetched, pages analyzed, findings by severity, elapsed time, throughput, ETA, and the current URL. When crawling ends, SCOPE changes the phase to analysis and report generation so the final processing period is not mistaken for a stalled crawl. You can pause, stop and keep a partial report, or cancel without generating a report.
+During the run, the **Start audit** control is disabled and labeled **Audit running…** so a second launch cannot interrupt the active audit. It becomes available again only after the run completes, fails, or is cancelled without a report. Watch crawlable URLs discovered, URLs fetched, pages analyzed, findings by severity, elapsed time, throughput, ETA, and the current URL. Counters are monotonic in the interface, so a late progress event cannot make completed work appear to move backward. When crawling ends, SCOPE changes the phase to PageSpeed, analysis, or report generation and shows measurements for that phase rather than mislabeling a fixed page count as crawl speed. **Stop & create partial report** aborts the active PageSpeed request/retry wait and proceeds to final analysis and report generation; **Cancel without report** stops without creating files.
 
 ## Choose modules
 
@@ -19,7 +19,7 @@ During the run, watch URLs discovered/fetched, pages analyzed, findings by sever
 - **Content:** titles, descriptions, headings, word/readability measurements, CTAs, freshness, duplicate and near-duplicate signals.
 - **Schema:** JSON-LD parsing, types, property-level problems, and page-specific suggestions supported by visible content.
 - **Images:** exhaustive inventory, alt text, opaque/CDN identifiers, filenames, repeated use, and context-based suggestions.
-- **PageSpeed:** mobile Lighthouse and available field data. This adds time and may use Google quota.
+- **PageSpeed:** mobile Lighthouse and available field data. This adds time and may use Google quota. Its live phase reports completed tests, eligible pages, remaining tests, percentage, and a phase-specific ETA. Enable **Skip PageSpeed tests on category and tag archives** to retain those pages in the SEO audit without spending a Lighthouse request on each archive listing.
 - **Keywords:** inferred on-page targets, GSC-observed queries, licensed SERP positions when configured, and cannibalization.
 - **AIO/AEO/GEO:** answer readiness, evidence, entities, direct answers, definitions, comparisons, numerical specificity, source provenance, freshness, visuals, and AI crawler access.
 - **External links:** validate directly linked destinations or explicitly follow them to a bounded depth in a custom audit.

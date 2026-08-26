@@ -26,6 +26,9 @@ export interface CrawlProgress {
   queued: number;
   currentUrl?: string;
   percent: number | null;
+  /** Phase-specific work counters, such as PageSpeed tests completed and eligible. */
+  stageCompleted?: number;
+  stageTotal?: number;
   critical?: number;
   warnings?: number;
   info?: number;
@@ -448,16 +451,27 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
 
   if (input.pageSpeed && !control.isCancelled()) {
     let pageSpeedRateLimited = false;
-    for (const [index, page] of pages.entries()) {
-      await onProgress({ phase: 'pagespeed', message: `Running PageSpeed for ${page.url}`, fetched: fetched.size, analyzed: pages.length, queued: 0, currentUrl: page.url, percent: 92 + Math.round(((index + 1) / Math.max(1, pages.length)) * 5), ...findingCounts() });
-      if (pageSpeedRateLimited) {
-        page.pageSpeed = [{ strategy: 'mobile', performance: null, accessibility: null, bestPractices: null, seo: null, metrics: {}, fieldMetrics: {}, errorCode: 'skipped_after_rate_limit', error: 'Skipped because Google PageSpeed quota was exhausted earlier in this audit. Retry later or configure PAGESPEED_API_KEY with available quota.' }];
-        continue;
+    const eligiblePages = pages.filter(page => !(input.pageSpeedSkipArchives && (page.pageType === 'category_archive' || page.pageType === 'tag_archive')));
+    const pageSpeedAbort = new AbortController();
+    const cancellationWatcher = setInterval(() => { if (control.isCancelled()) pageSpeedAbort.abort(); }, 100);
+    try {
+      for (const [index, page] of eligiblePages.entries()) {
+        if (control.isCancelled()) break;
+        await onProgress({ phase: 'pagespeed', message: `Running PageSpeed for ${page.url}`, fetched: fetched.size, analyzed: pages.length, queued: eligiblePages.length - index, stageCompleted: index, stageTotal: eligiblePages.length, currentUrl: page.url, percent: 92 + Math.round((index / Math.max(1, eligiblePages.length)) * 5), ...findingCounts() });
+        if (pageSpeedRateLimited) {
+          page.pageSpeed = [{ strategy: 'mobile', performance: null, accessibility: null, bestPractices: null, seo: null, metrics: {}, fieldMetrics: {}, errorCode: 'skipped_after_rate_limit', error: 'Skipped because Google PageSpeed quota was exhausted earlier in this audit. Retry later or configure PAGESPEED_API_KEY with available quota.' }];
+          continue;
+        }
+        if (index > 0) await Promise.race([sleep(1_100), new Promise<void>(resolve => pageSpeedAbort.signal.addEventListener('abort', () => resolve(), { once: true }))]);
+        if (control.isCancelled()) break;
+        const speed = await fetchPageSpeed(page.url, input.pageSpeedApiKey, { signal: pageSpeedAbort.signal });
+        if (control.isCancelled()) break;
+        page.pageSpeed = [speed];
+        if (speed.errorCode === 'rate_limited') pageSpeedRateLimited = true;
       }
-      if (index > 0) await new Promise(resolve => setTimeout(resolve, 1_100));
-      const speed = await fetchPageSpeed(page.url, input.pageSpeedApiKey); page.pageSpeed = [speed];
-      if (speed.errorCode === 'rate_limited') pageSpeedRateLimited = true;
-    }
+    } finally { clearInterval(cancellationWatcher); }
+    const completed = eligiblePages.filter(page => page.pageSpeed.length > 0).length;
+    await onProgress({ phase: 'pagespeed', message: control.isCancelled() ? 'PageSpeed stopped; preparing partial report' : 'PageSpeed testing complete', fetched: fetched.size, analyzed: pages.length, queued: Math.max(0, eligiblePages.length - completed), stageCompleted: completed, stageTotal: eligiblePages.length, percent: control.isCancelled() ? 97 : 97, ...findingCounts() });
   }
   const pageByUrl = new Map(pages.map(page => [graphKey(page.url), page]));
   for (const source of pages) {
@@ -517,7 +531,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     config: {
       startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords, maxRankings: input.maxRankings ?? 100,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
-      pageSpeed: input.pageSpeed, excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), sitemapOnly: Boolean(input.sitemapOnly), excludeArchives: Boolean(input.excludeArchives), externalCrawlDepth: externalDepth, maxExternalPages: input.maxExternalPages ?? 500, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
+      pageSpeed: input.pageSpeed, pageSpeedSkipArchives: Boolean(input.pageSpeedSkipArchives), excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), sitemapOnly: Boolean(input.sitemapOnly), excludeArchives: Boolean(input.excludeArchives), externalCrawlDepth: externalDepth, maxExternalPages: input.maxExternalPages ?? 500, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length,
       orphanPages: pages.filter(page => page.orphan).length,
