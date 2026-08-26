@@ -6,6 +6,7 @@ Notable changes to SCOPE are documented here. Dates use ISO format.
 
 ## Unreleased
 
+- Fixed the inert settings gear caused by unescaped generated dashboard JavaScript; added regression coverage for accessible link labels and strengthened GSC query-to-page cannibalization using impression share and average-position proximity.
 - Competitor baseline launches now inherit the source domain's latest retained crawl and audit settings, disclose the source run/date, and intentionally exclude property-specific GSC and GA4 data.
 - Added separate Competitive Intelligence and AIO/AEO/GEO Intelligence dashboards with dated, provider-labeled CSV imports, same-provider trend signals, evidence-boundary disclosures, and viewport-clamped KPI tooltips.
 - Replaced browser-native KPI title hints with visible, accessible hover/focus tooltips on current-audit and historical Trends dashboards.

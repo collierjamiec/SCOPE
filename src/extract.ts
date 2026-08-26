@@ -161,7 +161,9 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
     const element = $(el), url = normaliseUrl(element.attr('href') ?? '', finalUrl);
     const labelledBy = (element.attr('aria-labelledby') ?? '').split(/\s+/).filter(Boolean).map(id => cleanText($(`#${id}`).text())).filter(Boolean).join(' ');
     const hiddenText = element.find('.screen-reader-text,.sr-only,.visually-hidden,[class*="screen-reader"],[class*="visually-hidden"]').text();
-    const text = cleanText(element.text() || element.attr('aria-label') || labelledBy || element.attr('title') || hiddenText);
+    const text = [element.text(), element.attr('aria-label'), labelledBy, element.attr('title'), hiddenText]
+      .map(value => cleanText(value ?? ''))
+      .find(Boolean) ?? '';
     if (!url || /^skip (?:to )?(?:main )?content$/i.test(text)) return null;
     return { text, url, internal: sameHost(url, finalUrl) };
   }).get().filter((v): v is LinkInfo => Boolean(v));

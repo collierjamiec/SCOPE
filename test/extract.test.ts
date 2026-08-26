@@ -75,6 +75,12 @@ test('uses accessible link names and excludes skip-navigation links', () => {
   assert.deepEqual(result.links.map(link => link.text), ['Share on Bluesky', 'Next page']);
 });
 
+test('uses aria-label when visible anchor text is only whitespace', () => {
+  const html = '<title>Links</title><main><h1>Links</h1><a href="/share" aria-label="Share this article">   <svg></svg></a></main>';
+  const result = extractPage('https://example.com/', 'https://example.com/', 200, 'text/html', html, new Headers());
+  assert.equal(result.links[0]?.text, 'Share this article');
+});
+
 test('reports actionable JSON-LD syntax and core-property issues separately', () => {
   const html = '<title>Schema</title><h1>Schema</h1><script type="application/ld+json">{"@type":"Article",}</script><script type="application/ld+json">{"@type":"Article","headline":"Test"}</script>';
   const result = extractPage('https://example.test/', 'https://example.test/', 200, 'text/html', html, new Headers());

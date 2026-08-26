@@ -74,11 +74,15 @@ export function detectCannibalization(keywords: KeywordCandidate[]): Cannibaliza
       const observedPages = keyword.searchConsole!.pages.map(url => ({ url, score: keyword.pages.find(page => page.url === url)?.score ?? 0, ...metrics[url] })).sort((a, b) => (b.impressions ?? 0) - (a.impressions ?? 0));
       const totalImpressions = observedPages.reduce((sum, page) => sum + (page.impressions ?? 0), 0), leaderShare = totalImpressions ? (observedPages[0].impressions ?? 0) / totalImpressions : 0;
       if (leaderShare >= 0.9) return [];
+      const runnerUpShare = totalImpressions ? (observedPages[1]?.impressions ?? 0) / totalImpressions : 0;
+      const rankedPages = observedPages.filter(page => Number.isFinite(page.position) && (page.position ?? 0) > 0);
+      const positionSpread = rankedPages.length > 1 ? Math.abs((rankedPages[0].position ?? 0) - (rankedPages[1].position ?? 0)) : null;
+      const likely = leaderShare < 0.65 || (runnerUpShare >= 0.25 && positionSpread !== null && positionSpread <= 5);
       return [{
       keyword: keyword.keyword,
-      severity: leaderShare < 0.65 && observedPages.length > 2 ? 'likely' as const : 'possible' as const,
+      severity: likely ? 'likely' as const : 'possible' as const,
       pages: observedPages,
-      reason: `Google Search Console reports meaningful visibility across ${observedPages.length} landing pages. The leading page holds ${Math.round(leaderShare * 100)}% of observed impressions; review page intent, internal linking, and ranking stability.`
+      reason: `Google Search Console reports visibility across ${observedPages.length} landing pages (${totalImpressions} total impressions). The leader holds ${Math.round(leaderShare * 100)}% and the runner-up ${Math.round(runnerUpShare * 100)}% of observed impressions${positionSpread === null ? '' : `; their average positions are ${positionSpread.toFixed(1)} places apart`}. Review query intent, preferred-page consistency, internal linking, and movement across comparable reporting periods.`
     }]; }
     if (!keyword.pages.length) return [];
     const contenders = keyword.pages.filter(page => page.score >= Math.max(5, keyword.pages[0].score * 0.65));

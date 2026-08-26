@@ -16,13 +16,13 @@ SCOPE distinguishes **AIO answer readiness**, which can be assessed from crawl e
 - Meaningful redirect chains and final status, excluding pure trailing-slash normalization
 - Intentional gated and authentication flows, such as Patreon unlock links, classified separately instead of reported as broken
 - XML sitemap discovery, type, status, entries, child sitemaps, and unique same-domain page URLs
-- JSON-LD validity and detected schema types, separated from page-specific suggested schema
+- JSON-LD validity and detected schema types, including the reported JSON parse error or missing core property responsible for an invalid block, separated from page-specific suggested schema and remediation guidance
 - Word, sentence, and paragraph counts; sentence length; reading time; text-to-HTML ratio; Flesch Reading Ease; and Flesch-Kincaid grade level
 - Exhaustive image inventory, usage count, alt text, filename or CDN asset identifier, and optimization recommendations
 - Optional PageSpeed Insights and Core Web Vitals
 - SEO, GEO, and AIO opportunities with page-level findings and prioritized affected-page drilldowns
 - AIO answer readiness across accessibility, extractability, evidence, entity clarity, intent coverage, freshness, and multimodal accessibility
-- Keyword targeting, optional observed GSC queries, optional licensed SERP rankings, and cannibalization signals
+- Keyword targeting, optional observed GSC query-to-page positions, optional licensed SERP rankings, and evidence-labeled cannibalization signals
 
 ## Crawl behavior and safeguards
 
@@ -53,6 +53,8 @@ During a crawl, the dashboard shows live activity, fetched/analyzed/queued count
 
 Report interpretation is intentionally conservative: authentication/OAuth chains and trailing-slash normalization are excluded from SEO redirects; redirects are labeled deliberate, automatic-pattern, or unknown with supporting interpretation; omitted GA4 metrics remain unavailable rather than becoming zero; diagnostic search operators such as `site:` are excluded from keyword opportunities; and GSC cannibalization is suppressed when one landing page holds at least 90% of observed impressions.
 
+Accessible link names are resolved from visible text, `aria-label`, `aria-labelledby`, title text, and common visually hidden label classes before SCOPE uses `[No anchor text]`. Whitespace-only visible content does not override an available accessible label.
+
 ## Historical trends and MariaDB
 
 SCOPE retains every completed and intentionally saved partial audit in MariaDB. The normal dashboard startup is self-initializing: it loads `.env` automatically, uses the local-only bundled MariaDB configuration when `DATABASE_URL` is absent, starts the `mariadb` Docker Compose service when necessary, waits for it to become healthy, and applies pending schema migrations before opening the dashboard. Install and start Docker Desktop once, then use:
@@ -62,6 +64,10 @@ npm run dashboard
 ```
 
 The Trends page reports four distinct states: database unavailable, connected and awaiting its first baseline, baseline available, and comparison history available. A successful audit is retained automatically; the first is the baseline and the next comparable audit for that domain produces deltas.
+
+Historical storage is not limited to summary totals. `AuditRun` records retain crawl configuration fingerprints, ruleset versions, GSC/GA4 reporting periods, technical/search/analytics KPIs, and the saved report artifact. `RunFinding` records retain stable finding fingerprints, page URLs, severity, evidence, and rule identity; `RunDelta` classifies findings as opened, persisting, resolved, or reopened. `RunPageMetric` retains page-level crawl, search, analytics, schema, and performance measurements. Comparisons disclose when changed audit settings or rules make runs partially or non-comparable, and each retained run can be reopened as its original full dashboard.
+
+Observed cannibalization uses GSC query-plus-page rows from the Search Analytics API. SCOPE compares page-level impressions, clicks, average position, leader/runner-up impression share, and position proximity. A single page holding at least 90% of impressions suppresses the alert; otherwise the dashboard distinguishes possible from likely overlap and lists the affected landing pages. Without query-to-page evidence, SCOPE labels overlap as inferred on-page targeting rather than proven ranking cannibalization.
 
 Advanced or shared installations can copy `.env.example` to `.env` and replace the example database passwords or point `DATABASE_URL` at an existing MariaDB service. Manual database commands remain available for administration:
 
