@@ -146,7 +146,10 @@ export async function persistAuditRun(runId: string, report: AuditReport, output
   const domain = await prisma.domain.upsert({ where: { normalizedDomain: normalized }, update: { displayDomain: report.domain }, create: { normalizedDomain: normalized, displayDomain: report.domain } });
   const previous = await prisma.auditRun.findFirst({ where: { domainId: domain.id }, orderBy: { generatedAt: 'desc' }, include: { findings: true } });
   const comparable = comparison(previous, fingerprint);
-  const currentFindings = findings(report).map(({ page, finding }) => ({ fingerprint: findingFingerprint(normalized, page.url, finding), ruleId: finding.rule, normalizedPageUrl: normalizePageUrl(page.url), category: finding.category, severity: finding.severity, message: finding.message, evidenceJson: finding.evidence ? { evidence: finding.evidence } : undefined }));
+  const currentFindings = [...new Map(findings(report).map(({ page, finding }) => {
+    const item = { fingerprint: findingFingerprint(normalized, page.url, finding), ruleId: finding.rule, normalizedPageUrl: normalizePageUrl(page.url), category: finding.category, severity: finding.severity, message: finding.message, evidenceJson: finding.evidence ? { evidence: finding.evidence } : undefined };
+    return [item.fingerprint, item] as const;
+  })).values()];
   const currentSet = new Set(currentFindings.map(item => item.fingerprint)), previousSet = new Set(previous?.findings.map(item => item.fingerprint) ?? []);
   const earlier = previous ? await prisma.runFinding.findMany({ where: { run: { domainId: domain.id, generatedAt: { lt: previous.generatedAt } } }, select: { fingerprint: true }, distinct: ['fingerprint'] }) : [];
   const earlierSet = new Set(earlier.map(item => item.fingerprint));

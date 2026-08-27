@@ -38,6 +38,10 @@ When **Google URL Inspection enrichment** is enabled, SCOPE can also retrieve Go
 
 Use **Excluded path prefixes** under Crawl scope to omit a path and all descendants from the entire audit. Use **PageSpeed-only excluded path prefixes** under Performance & PageSpeed when those pages should remain in the crawl, content, links, schema, and other reports but should not consume PageSpeed time or quota. Separate entries with commas or new lines; `/blog` matches `/blog` and pages below `/blog/`.
 
+### Historical-storage failures
+
+Historical trends are an enrichment layer, not a prerequisite for receiving a completed audit. If MariaDB rejects a historical record, SCOPE now completes the dashboard and report files, displays a warning, and records the database error in Diagnostics. Repair the reported database issue before the next run; completed `report.json` files can be re-imported into history rather than recrawling the site.
+
 ### Schema validation
 
 The Schema dashboard inventories JSON-LD, Microdata, and RDFa; distinguishes JSON syntax from semantic Schema.org checks; and reports invalid nested `@type` values and supported core-property gaps. “JSON-LD parsed” means only that JSON syntax parsed successfully—not that the graph is fully valid. Every reported page includes **Validate this page’s schema**, which opens that live URL in the official Schema.org Markup Validator. SCOPE’s local checks and suggestions are useful screening evidence, not proof of complete validity or Google rich-result eligibility. Use Schema.org validation for the current vocabulary and Google’s Rich Results Test or URL Inspection evidence for Google-specific eligibility.

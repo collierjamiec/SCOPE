@@ -90,7 +90,12 @@ async function run(job: Job, config: AuditConfig) {
       writeFile(docxPath, documentBuffer)
     ]);
     reporting('Saving the historical audit record');
-    await persistAuditRun(job.id, report, directory);
+    try { await persistAuditRun(job.id, report, directory); }
+    catch (error) {
+      const message = 'The dashboard and report files completed, but SCOPE could not save this run to historical trends.';
+      job.notices.push(message);
+      await recordDiagnostic({ jobId: job.id, component: 'database', severity: 'error', event: 'history_persistence_failed', message, cause: error instanceof Error ? error.message : String(error), reproduction: 'Complete an audit with historical storage enabled.', resolution: 'Open diagnostics and repair the MariaDB schema or reported constraint. The completed report files remain available and can be imported into history after repair.', url: config.startUrl });
+    }
     job.status = 'complete'; job.report = report; job.directory = directory; job.docx = docxPath;
     await recordDiagnostic({ jobId: job.id, component: 'crawl', severity: job.notices.length ? 'warning' : 'info', event: 'audit_completed', message: `Audit completed in ${Math.round((Date.now() - job.startedAt) / 1000)} seconds${job.notices.length ? ` with ${job.notices.length} notice(s)` : ''}.`, url: config.startUrl });
     sendEvent(job, 'complete', { id: job.id, report, notices: job.notices, downloads: { docx: `/api/audits/${job.id}/download/docx`, pdf: `/api/audits/${job.id}/pdf-view` } });
