@@ -134,6 +134,7 @@ export interface CtaInfo extends LinkInfo {
 }
 
 export interface SchemaMarkup {
+  format?: "jsonld" | "microdata" | "rdfa";
   raw: string;
   parsed: unknown | null;
   types: string[];

@@ -32,9 +32,17 @@ function jsonParseExplanation(raw: string, error: unknown): string {
 function schemaValidationIssues(value: unknown): string[] {
   const required: Record<string, string[]> = { Article: ['headline', 'author', 'datePublished'], BlogPosting: ['headline', 'author', 'datePublished'], Product: ['name'], Review: ['itemReviewed', 'reviewRating', 'author'], AggregateRating: ['ratingValue', 'reviewCount'], FAQPage: ['mainEntity'], Organization: ['name', 'url'], BreadcrumbList: ['itemListElement'] };
   const nodes: Record<string, unknown>[] = [];
-  const visit = (item: unknown) => { if (Array.isArray(item)) item.forEach(visit); else if (item && typeof item === 'object') { const record = item as Record<string, unknown>; nodes.push(record); if (record['@graph']) visit(record['@graph']); } };
+  const visit = (item: unknown) => { if (Array.isArray(item)) item.forEach(visit); else if (item && typeof item === 'object') { const record = item as Record<string, unknown>; nodes.push(record); Object.values(record).forEach(visit); } };
   visit(value);
-  return nodes.flatMap(node => (typeof node['@type'] === 'string' ? [node['@type']] : Array.isArray(node['@type']) ? node['@type'].filter((type): type is string => typeof type === 'string') : []).flatMap(type => (required[type] ?? []).filter(property => node[property] === undefined || node[property] === '').map(property => `${type} is missing core property “${property}”`)));
+  return [...new Set(nodes.flatMap(node => {
+    const rawTypes = node['@type'] === undefined ? [] : Array.isArray(node['@type']) ? node['@type'] : [node['@type']];
+    const typeIssues = rawTypes.flatMap(type => typeof type !== 'string' ? ['@type must be a text value or list of text values'] : !/^(?:https?:\/\/schema\.org\/)?[A-Za-z][A-Za-z0-9._-]*$/.test(type) ? [`“${type}” is not a valid Schema.org @type name`] : []);
+    const requiredIssues = rawTypes.filter((type): type is string => typeof type === 'string').flatMap(type => {
+      const compact = type.replace(/^https?:\/\/schema\.org\//, '');
+      return (required[compact] ?? []).filter(property => node[property] === undefined || node[property] === '').map(property => `${compact} is missing core property “${property}”`);
+    });
+    return [...typeIssues, ...requiredIssues];
+  }))];
 }
 
 function schemaHasProperty(value: unknown, property: string): boolean {
@@ -137,8 +145,8 @@ function findingsFor(page: Pick<PageResult, 'title'|'metaDescription'|'metaDescr
   if (!archive && page.wordCount < 150) out.push({ category: 'geo', severity: 'warning', rule: 'thin_content', message: `Only ${page.wordCount} visible words were extracted.` });
   if (!archive && page.h2s.length === 0) out.push({ category: 'aio', severity: 'info', rule: 'answer_structure', message: 'No H2 sections were found; clear topical sections may improve extractability.' });
   if (!archive && page.schemas.length === 0) out.push({ category: 'geo', severity: 'info', rule: 'schema_missing', message: 'No JSON-LD markup was found.' });
-  for (const [index, schema] of page.schemas.entries()) if (!schema.validJson) out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: `JSON-LD block ${index + 1} is invalid: ${schema.error ?? 'unknown parse error'}`, evidence: schema.raw.slice(0, 500) });
-  for (const [index, schema] of page.schemas.entries()) for (const issue of schema.validationIssues ?? []) out.push({ category: 'seo', severity: 'warning', rule: 'schema_missing_core_property', message: `JSON-LD block ${index + 1}: ${issue}.`, evidence: schema.types.join(', ') });
+  for (const [index, schema] of page.schemas.entries()) if (!schema.validJson) out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: `JSON-LD block ${index + 1} has invalid JSON syntax: ${schema.error ?? 'unknown parse error'}`, evidence: schema.raw.slice(0, 500) });
+  for (const [index, schema] of page.schemas.entries()) for (const issue of schema.validationIssues ?? []) out.push({ category: 'seo', severity: 'warning', rule: 'schema_semantic_validation', message: `${schema.format === 'microdata' ? 'Microdata' : schema.format === 'rdfa' ? 'RDFa' : 'JSON-LD'} block ${index + 1}: ${issue}.`, evidence: schema.types.join(', ') });
   return out;
 }
 
@@ -181,9 +189,15 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   }).map((_, el) => ({ text: cleanText($(el).text()), level: Number(el.tagName.slice(1)) as Heading['level'] })).get().filter(h => h.text);
   const schemas: SchemaMarkup[] = $('script[type="application/ld+json" i]').map((_, el) => {
     const raw = $(el).html()?.trim() ?? '';
-    try { const parsed: unknown = JSON.parse(raw); return { raw, parsed, types: schemaTypes(parsed), validJson: true, validationIssues: schemaValidationIssues(parsed) }; }
-    catch (error) { return { raw, parsed: null, types: [], validJson: false, error: jsonParseExplanation(raw, error) }; }
+    try { const parsed: unknown = JSON.parse(raw); return { raw, parsed, types: schemaTypes(parsed), validJson: true, format: 'jsonld' as const, validationIssues: schemaValidationIssues(parsed) }; }
+    catch (error) { return { raw, parsed: null, types: [], validJson: false, format: 'jsonld' as const, error: jsonParseExplanation(raw, error) }; }
   }).get();
+  const embeddedSchemas: SchemaMarkup[] = $('[itemscope][itemtype], [typeof]').map((_, el) => {
+    const element = $(el), itemTypes = (element.attr('itemtype') ?? '').split(/\s+/).filter(Boolean).map(value => value.replace(/^https?:\/\/schema\.org\//, '')), rdfaTypes = (element.attr('typeof') ?? '').split(/\s+/).filter(Boolean).map(value => value.replace(/^schema:/i, ''));
+    const format = itemTypes.length ? 'microdata' as const : 'rdfa' as const, types = [...new Set([...itemTypes, ...rdfaTypes])];
+    return { raw: $.html(el), parsed: null, types, validJson: true, format, validationIssues: types.filter(type => !/^[A-Za-z][A-Za-z0-9._-]*$/.test(type)).map(type => `“${type}” is not a valid Schema.org type name`) };
+  }).get();
+  schemas.push(...embeddedSchemas);
   const text = cleanText($('main').first().text() || $('body').text());
   const paragraphCount = $('main p,article p').filter((_, paragraph) => cleanText($(paragraph).text()).length > 0).length;
   const contentMetrics = measureReadability(text, html, paragraphCount);

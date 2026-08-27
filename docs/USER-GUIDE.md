@@ -40,7 +40,7 @@ Use **Excluded path prefixes** under Crawl scope to omit a path and all descenda
 
 ### Schema validation
 
-The Schema dashboard distinguishes detected JSON-LD, local JSON/core-property checks, and suggested schema. Every reported page includes **Validate this page’s schema**, which opens that live URL in the official Schema.org Markup Validator. SCOPE’s suggestions are contextual recommendations—not proof of validity or Google rich-result eligibility. Use Schema.org validation for vocabulary/syntax and Google’s Rich Results Test or URL Inspection evidence for Google-specific eligibility.
+The Schema dashboard inventories JSON-LD, Microdata, and RDFa; distinguishes JSON syntax from semantic Schema.org checks; and reports invalid nested `@type` values and supported core-property gaps. “JSON-LD parsed” means only that JSON syntax parsed successfully—not that the graph is fully valid. Every reported page includes **Validate this page’s schema**, which opens that live URL in the official Schema.org Markup Validator. SCOPE’s local checks and suggestions are useful screening evidence, not proof of complete validity or Google rich-result eligibility. Use Schema.org validation for the current vocabulary and Google’s Rich Results Test or URL Inspection evidence for Google-specific eligibility.
 
 CSV fallback accepts the normal `Queries.csv`, `Pages.csv`, and `Filters.csv` export. `Filters.csv` provides the reporting period. Separate Queries and Pages aggregate files cannot reconstruct query-to-page relationships; SCOPE says so instead of guessing.
 

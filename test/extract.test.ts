@@ -109,6 +109,13 @@ test('reports actionable JSON-LD syntax and core-property issues separately', ()
   const html = '<title>Schema</title><h1>Schema</h1><script type="application/ld+json">{"@type":"Article",}</script><script type="application/ld+json">{"@type":"Article","headline":"Test"}</script>';
   const result = extractPage('https://example.test/', 'https://example.test/', 200, 'text/html', html, new Headers());
   assert.match(result.schemas[0].error ?? '', /line|position/i);
-  assert.ok(result.findings.some(finding => finding.rule === 'schema_invalid_json' && /invalid:/i.test(finding.message)));
-  assert.ok(result.findings.some(finding => finding.rule === 'schema_missing_core_property' && /author/.test(finding.message)));
+  assert.ok(result.findings.some(finding => finding.rule === 'schema_invalid_json' && /invalid JSON syntax/i.test(finding.message)));
+  assert.ok(result.findings.some(finding => finding.rule === 'schema_semantic_validation' && /author/.test(finding.message)));
+});
+
+test('catches invalid nested Schema.org types and inventories embedded structured data', () => {
+  const html = '<html itemscope itemtype="https://schema.org/Blog"><head><title>Schema</title><script type="application/ld+json">{"@type":"BlogPosting","headline":"Test","datePublished":"2026-08-27","author":{"@type":"Queer and Unbroken","name":"Queer and Unbroken"}}</script></head><body><h1>Schema</h1></body></html>';
+  const result = extractPage('https://example.test/post/', 'https://example.test/post/', 200, 'text/html', html, new Headers());
+  assert.ok(result.schemas.some(schema => schema.format === 'microdata' && schema.types.includes('Blog')));
+  assert.ok(result.findings.some(finding => finding.rule === 'schema_semantic_validation' && /Queer and Unbroken.*not a valid Schema\.org @type/i.test(finding.message)));
 });
