@@ -139,6 +139,8 @@ export interface SchemaMarkup {
   parsed: unknown | null;
   types: string[];
   validJson: boolean;
+  /** Best-effort @type values recovered from malformed JSON-LD; never treated as validated. */
+  inferredTypes?: string[];
   error?: string;
   validationIssues?: string[];
 }

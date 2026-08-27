@@ -109,7 +109,9 @@ test('reports actionable JSON-LD syntax and core-property issues separately', ()
   const html = '<title>Schema</title><h1>Schema</h1><script type="application/ld+json">{"@type":"Article",}</script><script type="application/ld+json">{"@type":"Article","headline":"Test"}</script>';
   const result = extractPage('https://example.test/', 'https://example.test/', 200, 'text/html', html, new Headers());
   assert.match(result.schemas[0].error ?? '', /line|position/i);
+  assert.deepEqual(result.schemas[0].inferredTypes, ['Article']);
   assert.ok(result.findings.some(finding => finding.rule === 'schema_invalid_json' && /invalid JSON syntax/i.test(finding.message)));
+  assert.ok(result.findings.some(finding => finding.rule === 'schema_invalid_json' && /likely Article/i.test(finding.message)));
   assert.ok(result.findings.some(finding => finding.rule === 'schema_semantic_validation' && /author/.test(finding.message)));
 });
 

@@ -21,6 +21,14 @@ function schemaTypes(value: unknown): string[] {
   const own = typeof record['@type'] === 'string' ? [record['@type']] : Array.isArray(record['@type']) ? record['@type'].filter((v): v is string => typeof v === 'string') : [];
   return [...new Set([...own, ...schemaTypes(record['@graph'])])];
 }
+function inferredSchemaTypes(raw: string): string[] {
+  const found: string[] = [];
+  for (const match of raw.matchAll(/["']@type["']\s*:\s*["']([^"'\r\n]+)["']/gi)) found.push(match[1].replace(/^https?:\/\/schema\.org\//i, '').trim());
+  for (const match of raw.matchAll(/["']@type["']\s*:\s*\[([^\]]*)\]/gi)) {
+    for (const value of match[1].matchAll(/["']([^"'\r\n]+)["']/g)) found.push(value[1].replace(/^https?:\/\/schema\.org\//i, '').trim());
+  }
+  return [...new Set(found.filter(Boolean))];
+}
 function jsonParseExplanation(raw: string, error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const position = Number(message.match(/position\s+(\d+)/i)?.[1]);
@@ -145,7 +153,10 @@ function findingsFor(page: Pick<PageResult, 'title'|'metaDescription'|'metaDescr
   if (!archive && page.wordCount < 150) out.push({ category: 'geo', severity: 'warning', rule: 'thin_content', message: `Only ${page.wordCount} visible words were extracted.` });
   if (!archive && page.h2s.length === 0) out.push({ category: 'aio', severity: 'info', rule: 'answer_structure', message: 'No H2 sections were found; clear topical sections may improve extractability.' });
   if (!archive && page.schemas.length === 0) out.push({ category: 'geo', severity: 'info', rule: 'schema_missing', message: 'No JSON-LD markup was found.' });
-  for (const [index, schema] of page.schemas.entries()) if (!schema.validJson) out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: `JSON-LD block ${index + 1} has invalid JSON syntax: ${schema.error ?? 'unknown parse error'}`, evidence: schema.raw.slice(0, 500) });
+  for (const [index, schema] of page.schemas.entries()) if (!schema.validJson) {
+    const identity = schema.inferredTypes?.length ? ` (likely ${schema.inferredTypes.join(', ')})` : ' (schema type could not be recovered)';
+    out.push({ category: 'seo', severity: 'warning', rule: 'schema_invalid_json', message: `JSON-LD block ${index + 1}${identity} has invalid JSON syntax: ${schema.error ?? 'unknown parse error'}`, evidence: schema.raw.slice(0, 500) });
+  }
   for (const [index, schema] of page.schemas.entries()) for (const issue of schema.validationIssues ?? []) out.push({ category: 'seo', severity: 'warning', rule: 'schema_semantic_validation', message: `${schema.format === 'microdata' ? 'Microdata' : schema.format === 'rdfa' ? 'RDFa' : 'JSON-LD'} block ${index + 1}: ${issue}.`, evidence: schema.types.join(', ') });
   return out;
 }
@@ -190,7 +201,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const schemas: SchemaMarkup[] = $('script[type="application/ld+json" i]').map((_, el) => {
     const raw = $(el).html()?.trim() ?? '';
     try { const parsed: unknown = JSON.parse(raw); return { raw, parsed, types: schemaTypes(parsed), validJson: true, format: 'jsonld' as const, validationIssues: schemaValidationIssues(parsed) }; }
-    catch (error) { return { raw, parsed: null, types: [], validJson: false, format: 'jsonld' as const, error: jsonParseExplanation(raw, error) }; }
+    catch (error) { return { raw, parsed: null, types: [], inferredTypes: inferredSchemaTypes(raw), validJson: false, format: 'jsonld' as const, error: jsonParseExplanation(raw, error) }; }
   }).get();
   const embeddedSchemas: SchemaMarkup[] = $('[itemscope][itemtype], [typeof]').map((_, el) => {
     const element = $(el), itemTypes = (element.attr('itemtype') ?? '').split(/\s+/).filter(Boolean).map(value => value.replace(/^https?:\/\/schema\.org\//, '')), rdfaTypes = (element.attr('typeof') ?? '').split(/\s+/).filter(Boolean).map(value => value.replace(/^schema:/i, ''));
