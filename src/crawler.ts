@@ -450,7 +450,7 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
 
   if (input.pageSpeed && !control.isCancelled()) {
     let pageSpeedRateLimited = false;
-    const eligiblePages = pages.filter(page => !(input.pageSpeedSkipArchives && (page.pageType === 'category_archive' || page.pageType === 'tag_archive')));
+    const eligiblePages = pages.filter(page => !(input.pageSpeedSkipArchives && (page.pageType === 'category_archive' || page.pageType === 'tag_archive')) && !isExcludedUrl(page.url, input.pageSpeedExcludePaths));
     const pageSpeedConcurrency = Math.min(25, Math.max(1, Math.floor(input.pageSpeedConcurrency ?? 5)));
     const pageSpeedAbort = new AbortController();
     const cancellationWatcher = setInterval(() => { if (control.isCancelled()) pageSpeedAbort.abort(); }, 100);
@@ -539,7 +539,9 @@ export async function crawlSite(input: AuditConfig, onProgress: ProgressReporter
     config: {
       startUrl: input.startUrl, maxPages: input.maxPages, maxKeywords: input.maxKeywords, maxRankings: input.maxRankings ?? 100,
       concurrency: input.concurrency, delayMs: input.delayMs, userAgent: input.userAgent,
-      pageSpeed: input.pageSpeed, pageSpeedSkipArchives: Boolean(input.pageSpeedSkipArchives), excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), sitemapOnly: Boolean(input.sitemapOnly), excludeArchives: Boolean(input.excludeArchives), externalCrawlDepth: externalDepth, maxExternalPages: input.maxExternalPages ?? 500, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
+      pageSpeed: input.pageSpeed,
+      pageSpeedSkipArchives: Boolean(input.pageSpeedSkipArchives), pageSpeedExcludePaths: input.pageSpeedExcludePaths ?? [],
+      excludePaths: configuredExclusions, maxDepth: input.maxDepth ?? 12, maxUrlsPerPath: input.maxUrlsPerPath ?? 2000, stripTrackingParameters: input.stripTrackingParameters !== false, renderJavaScript: Boolean(input.renderJavaScript), sitemapOnly: Boolean(input.sitemapOnly), excludeArchives: Boolean(input.excludeArchives), externalCrawlDepth: externalDepth, maxExternalPages: input.maxExternalPages ?? 500, analyzeImages: input.analyzeImages !== false, reportBrokenLinks: input.reportBrokenLinks !== false, analyzeSchema: input.analyzeSchema !== false, serpConfigured: Boolean(input.serp), imageAnalysisConfigured: Boolean(input.imageAnalysis)
     },
     summary: { pagesFetched: fetched.size, indexablePagesAnalyzed: pages.length, excludedNonIndexable: excluded.length, keywordsIdentified: keywords.length, rankingsChecked: keywords.filter(k => k.ranking).length, sitemapPageUrls: sitemapInfo.pageUrls.length,
       orphanPages: pages.filter(page => page.orphan).length,

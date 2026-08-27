@@ -30,6 +30,18 @@ During the run, the **Start audit** control is disabled and labeled **Audit runn
 
 Use the read-only API connection when possible. Open **Settings → Connected data → Google Search Console API**, save the installed OAuth client locally, connect the correct Google account, select the property, and select the dates. The API can request Query + Page rows together, which is necessary for reliable keyword-to-landing-page and cannibalization evidence.
 
+Use **Shared Google reporting period** to keep Search Console and GA4 comparisons aligned. Choose This month, Last month, Last 60 days, Last 90 days (the default), Last 6 months, Last year, or Year to date. Presets use the latest commonly reliable Google reporting date as their endpoint. Choosing custom dates—or editing either integration's dates directly—automatically mirrors the same start and end dates to the other Google integration.
+
+When **Google URL Inspection enrichment** is enabled, SCOPE can also retrieve Google’s indexed-page verdict, fetch/indexing state, Google-selected canonical, and rich-result verdict for up to 2,000 audited URLs per property per day. This is Google’s view of its indexed copy, not a live crawl, and unavailable results are labeled rather than guessed.
+
+### Excluding paths
+
+Use **Excluded path prefixes** under Crawl scope to omit a path and all descendants from the entire audit. Use **PageSpeed-only excluded path prefixes** under Performance & PageSpeed when those pages should remain in the crawl, content, links, schema, and other reports but should not consume PageSpeed time or quota. Separate entries with commas or new lines; `/blog` matches `/blog` and pages below `/blog/`.
+
+### Schema validation
+
+The Schema dashboard distinguishes detected JSON-LD, local JSON/core-property checks, and suggested schema. Every reported page includes **Validate this page’s schema**, which opens that live URL in the official Schema.org Markup Validator. SCOPE’s suggestions are contextual recommendations—not proof of validity or Google rich-result eligibility. Use Schema.org validation for vocabulary/syntax and Google’s Rich Results Test or URL Inspection evidence for Google-specific eligibility.
+
 CSV fallback accepts the normal `Queries.csv`, `Pages.csv`, and `Filters.csv` export. `Filters.csv` provides the reporting period. Separate Queries and Pages aggregate files cannot reconstruct query-to-page relationships; SCOPE says so instead of guessing.
 
 ### Google Analytics 4

@@ -90,3 +90,25 @@ export async function fetchSearchConsoleQueryPages(credentials: GoogleLocalCrede
   const lines = ['Query,Page,Clicks,Impressions,CTR,Position', ...collected.map(row => [row.keys?.[0], row.keys?.[1], row.clicks, row.impressions, row.ctr, row.position].map(csv).join(','))];
   return { csv: `${lines.join('\n')}\n`, rows: collected.length };
 }
+
+export async function inspectSearchConsoleUrl(credentials: GoogleLocalCredentials, siteUrl: string, inspectionUrl: string) {
+  const data = await googleJson('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', await accessToken(credentials), {
+    method: 'POST',
+    body: JSON.stringify({ inspectionUrl, siteUrl, languageCode: 'en-US' })
+  });
+  const result = data.inspectionResult ?? {}, index = result.indexStatusResult ?? {}, rich = result.richResultsResult ?? {};
+  return {
+    verdict: index.verdict,
+    coverageState: index.coverageState,
+    robotsTxtState: index.robotsTxtState,
+    indexingState: index.indexingState,
+    pageFetchState: index.pageFetchState,
+    googleCanonical: index.googleCanonical,
+    userCanonical: index.userCanonical,
+    lastCrawlTime: index.lastCrawlTime,
+    crawledAs: index.crawledAs,
+    richResultsVerdict: rich.verdict,
+    richResultTypes: (rich.detectedItems ?? []).map((item: any) => String(item.richResultType ?? '')).filter(Boolean),
+    inspectionResultLink: result.inspectionResultLink
+  };
+}

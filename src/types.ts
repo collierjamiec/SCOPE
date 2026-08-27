@@ -13,6 +13,8 @@ export interface AuditConfig {
   pageSpeedConcurrency?: number;
   /** Do not spend PageSpeed quota on category and tag archive listings. */
   pageSpeedSkipArchives?: boolean;
+  /** URL path prefixes that remain crawlable but are omitted from PageSpeed testing. */
+  pageSpeedExcludePaths?: string[];
   pageSpeedApiKey?: string;
   serp?: SerpConfig;
   imageAnalysis?: ImageAnalysisConfig;
@@ -28,6 +30,8 @@ export interface AuditConfig {
   /** Reporting period supplied by a direct Search Console API query. */
   gscDateRangeOverride?: { start: string; end: string; label: string; source: 'Google Search Console API' };
   gscProperty?: string;
+  /** Optional URL Inspection enrichment using the locally connected GSC account. */
+  gscUrlInspection?: { siteUrl: string; maximumUrls: number };
   ga4Csv?: string;
   ga4DateRangeOverride?: { start: string; end: string; label: string; source: 'User-entered for GA4 CSV' | 'Google Analytics Data API' };
   ga4Property?: string;
@@ -209,6 +213,21 @@ export interface PageResult {
   canonical: string | null;
   robotsDirectives: string[];
   indexable: boolean;
+  gscInspection?: {
+    verdict?: string;
+    coverageState?: string;
+    robotsTxtState?: string;
+    indexingState?: string;
+    pageFetchState?: string;
+    googleCanonical?: string;
+    userCanonical?: string;
+    lastCrawlTime?: string;
+    crawledAs?: string;
+    richResultsVerdict?: string;
+    richResultTypes?: string[];
+    inspectionResultLink?: string;
+    error?: string;
+  };
   h1s: string[];
   h2s: string[];
   headings: Heading[];

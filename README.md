@@ -142,6 +142,14 @@ On each installed device, open **Settings → Connected data → Google Search C
 4. Paste the client ID and client secret into SCOPE and choose **Save locally & connect**.
 5. Select the Google account, Search Console property, and reporting dates for the audit.
 
+The settings screen uses one shared Google reporting-period control for GSC and GA4. **Last 90 days** is the default; This month, Last month, Last 60 days, Last 6 months, Last year, Year to date, and synchronized custom dates are also available. Presets end on the latest commonly reliable date shared by the two Google services so comparisons never silently use unequal periods.
+
+Optional URL Inspection enrichment adds Google’s indexed status, fetch/indexing state, selected canonical, and rich-result verdict for audited pages. The UI discloses Google’s 2,000-inspections-per-property daily quota and lets the user cap each audit.
+
+Path controls are separate by design: crawl exclusions remove matching paths from every module, while PageSpeed-only exclusions preserve those pages everywhere else and skip only Google PageSpeed requests.
+
+The Schema dashboard includes a per-page link to the official Schema.org Markup Validator. Local SCOPE checks and suggestions are explicitly separated from independent Schema.org validation and Google-specific rich-result eligibility.
+
 The OAuth client configuration and refresh token are stored only in the installation-local, Git-ignored SCOPE data directory (`.scope/google-search-console.json` by default) with owner-only file permissions. Packaged installations can set an OS-specific application-data location with `SCOPE_DATA_DIR`, or set an exact path with `SCOPE_GOOGLE_CREDENTIALS_FILE`. Credentials and tokens are never included in audit files, API responses, logs, or Git. The interface can reconnect with another Google account, disconnect the current account while retaining the installed OAuth client, or remove all locally stored Google credentials.
 
 SCOPE requests finalized Web search data in pages of 25,000 rows, up to 50,000 query/page rows per audit. Google may still omit anonymized or lower-volume rows because of Search Console’s internal data limitations.
