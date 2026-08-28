@@ -131,7 +131,7 @@ function pageSection(page: PageResult, index: number, config: AuditReport['confi
     if (!page.schemas.length) children.push(body('None detected.'));
     for (const schema of page.schemas) {
       children.push(body(schema.validJson ? `Valid: ${schema.types.join(', ') || 'Type not declared'}` : `Invalid JSON${schema.inferredTypes?.length ? ` — likely type: ${schema.inferredTypes.join(', ')}` : ' — schema type could not be recovered'}: ${schema.error ?? 'Unable to parse'}`));
-      for (const issue of schema.validationIssues ?? []) children.push(bullet(`Structured-data property issue: ${issue}. Add the property only when it is supported by visible page content.`));
+      for (const issue of (schema.validationIssues ?? []).filter(value => !/not a valid Schema\.org @type name|Organization is missing core property [“"]url[”"]/i.test(value))) children.push(bullet(`Structured-data property issue: ${issue}. Add the property only when it is supported by visible page content.`));
     }
     children.push(horizontalRule(), heading('Suggested Schema', 3));
     if (!page.suggestedSchemas?.length) children.push(body('No additional schema type was confidently suggested from the visible page content.'));

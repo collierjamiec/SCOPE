@@ -38,13 +38,16 @@ function jsonParseExplanation(raw: string, error: unknown): string {
   return `Line ${line}, column ${column}: ${message}. ${hint}`;
 }
 function schemaValidationIssues(value: unknown): string[] {
-  const required: Record<string, string[]> = { Article: ['headline', 'author', 'datePublished'], BlogPosting: ['headline', 'author', 'datePublished'], Product: ['name'], Review: ['itemReviewed', 'reviewRating', 'author'], AggregateRating: ['ratingValue', 'reviewCount'], FAQPage: ['mainEntity'], Organization: ['name', 'url'], BreadcrumbList: ['itemListElement'] };
+  const required: Record<string, string[]> = { Article: ['headline', 'author', 'datePublished'], BlogPosting: ['headline', 'author', 'datePublished'], Product: ['name'], Review: ['itemReviewed', 'reviewRating', 'author'], AggregateRating: ['ratingValue', 'reviewCount'], FAQPage: ['mainEntity'], Organization: ['name'], BreadcrumbList: ['itemListElement'] };
   const nodes: Record<string, unknown>[] = [];
   const visit = (item: unknown) => { if (Array.isArray(item)) item.forEach(visit); else if (item && typeof item === 'object') { const record = item as Record<string, unknown>; nodes.push(record); Object.values(record).forEach(visit); } };
   visit(value);
   return [...new Set(nodes.flatMap(node => {
     const rawTypes = node['@type'] === undefined ? [] : Array.isArray(node['@type']) ? node['@type'] : [node['@type']];
-    const typeIssues = rawTypes.flatMap(type => typeof type !== 'string' ? ['@type must be a text value or list of text values'] : !/^(?:https?:\/\/schema\.org\/)?[A-Za-z][A-Za-z0-9._-]*$/.test(type) ? [`“${type}” is not a valid Schema.org @type name`] : []);
+    // Schema.org permits extension vocabularies, so local name-pattern checks
+    // must not claim an unfamiliar string is invalid. The official validator
+    // remains authoritative for vocabulary membership.
+    const typeIssues = rawTypes.flatMap(type => typeof type !== 'string' || !type.trim() ? ['@type must be a non-empty text value or list of non-empty text values'] : []);
     const requiredIssues = rawTypes.filter((type): type is string => typeof type === 'string').flatMap(type => {
       const compact = type.replace(/^https?:\/\/schema\.org\//, '');
       return (required[compact] ?? []).filter(property => node[property] === undefined || node[property] === '').map(property => `${compact} is missing core property “${property}”`);
@@ -206,7 +209,7 @@ export function extractPage(requestedUrl: string, finalUrl: string, status: numb
   const embeddedSchemas: SchemaMarkup[] = $('[itemscope][itemtype], [typeof]').map((_, el) => {
     const element = $(el), itemTypes = (element.attr('itemtype') ?? '').split(/\s+/).filter(Boolean).map(value => value.replace(/^https?:\/\/schema\.org\//, '')), rdfaTypes = (element.attr('typeof') ?? '').split(/\s+/).filter(Boolean).map(value => value.replace(/^schema:/i, ''));
     const format = itemTypes.length ? 'microdata' as const : 'rdfa' as const, types = [...new Set([...itemTypes, ...rdfaTypes])];
-    return { raw: $.html(el), parsed: null, types, validJson: true, format, validationIssues: types.filter(type => !/^[A-Za-z][A-Za-z0-9._-]*$/.test(type)).map(type => `“${type}” is not a valid Schema.org type name`) };
+    return { raw: $.html(el), parsed: null, types, validJson: true, format, validationIssues: [] };
   }).get();
   schemas.push(...embeddedSchemas);
   const text = cleanText($('main').first().text() || $('body').text());
