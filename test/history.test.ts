@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findingFingerprint, normalizeDomain, normalizePageUrl } from '../src/history.js';
+import { findingFingerprint, normalizeDomain, normalizePageUrl, uniqueHistoryPages } from '../src/history.js';
 import { applyInternalGraphMetrics } from '../src/crawler.js';
 import type { PageResult } from '../src/types.js';
 
@@ -27,4 +27,17 @@ test('derives minimum click depth and exhaustive orphan findings from the link g
   assert.deepEqual(pages.map(item => item.clickDepth), [0, 1, 2, null]);
   assert.equal(pages[3].orphan, true);
   assert.equal(pages[3].findings[0].rule, 'orphan_page');
+});
+
+test('deduplicates normalized page variants before historical persistence', () => {
+  const redirected = page('http://www.example.com/about/?utm_source=test', []);
+  redirected.status = 301;
+  redirected.indexable = false;
+  redirected.canonicalMatchesUrl = false;
+  const canonical = page('https://example.com/about/', []);
+  canonical.wordCount = 500;
+  const selected = uniqueHistoryPages([redirected, canonical]);
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].url, canonical.url);
+  assert.equal(normalizePageUrl(selected[0].url), 'example.com/about');
 });

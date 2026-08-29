@@ -40,7 +40,7 @@ Use **Excluded path prefixes** under Crawl scope to omit a path and all descenda
 
 ### Historical-storage failures
 
-Historical trends are an enrichment layer, not a prerequisite for receiving a completed audit. If MariaDB rejects a historical record, SCOPE now completes the dashboard and report files, displays a warning, and records the database error in Diagnostics. Repair the reported database issue before the next run; completed `report.json` files can be re-imported into history rather than recrawling the site.
+Historical trends are an enrichment layer, not a prerequisite for receiving a completed audit. If MariaDB rejects a historical record, SCOPE now completes the dashboard and report files, displays a warning, and records the database error in Diagnostics. Historical page metrics use one representative per normalized page identity, preventing HTTP/HTTPS, www/non-www, trailing-slash, and tracking-parameter variants from colliding while preserving every observed variant in the downloadable crawl evidence. Repair the reported database issue before the next run; completed `report.json` files can be re-imported into history rather than recrawling the site.
 
 ### Schema validation
 

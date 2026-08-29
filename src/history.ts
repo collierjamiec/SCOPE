@@ -94,6 +94,29 @@ export function normalizePageUrl(value: string): string {
   return `${url.hostname}${port}${url.pathname}${url.search}`;
 }
 
+const historyPageQuality = (page: PageResult) =>
+  (page.indexable ? 1_000_000 : 0) +
+  (page.status === 200 ? 100_000 : 0) +
+  (page.canonicalMatchesUrl ? 10_000 : 0) +
+  (page.analytics ? 1_000 : 0) +
+  (page.pageSpeed.length ? 100 : 0) +
+  Math.min(page.wordCount, 99);
+
+/**
+ * History stores one metric snapshot per normalized page identity. A crawl can
+ * legitimately retain multiple observed variants (www/non-www, tracking
+ * parameters, or trailing slashes), so select the strongest representative
+ * without changing the full report or crawl evidence.
+ */
+export function uniqueHistoryPages(pages: PageResult[]): PageResult[] {
+  const selected = new Map<string, PageResult>();
+  for (const page of pages) {
+    const key = normalizePageUrl(page.url), current = selected.get(key);
+    if (!current || historyPageQuality(page) > historyPageQuality(current)) selected.set(key, page);
+  }
+  return [...selected.values()];
+}
+
 const findingDiscriminator = (finding: Finding) => finding.rule === 'broken_link' || finding.rule.includes('schema') || finding.rule.includes('mixed_content') ? finding.evidence ?? '' : '';
 export const findingFingerprint = (domain: string, pageUrl: string, finding: Finding) => hash([domain, normalizePageUrl(pageUrl), finding.rule, findingDiscriminator(finding)].join('\n'));
 
@@ -163,7 +186,7 @@ export async function persistAuditRun(runId: string, report: AuditReport, output
     await tx.auditRun.create({ data: {
       id: runId, domainId: domain.id, rawStartUrl: report.config.startUrl, normalizedDomain: normalized, generatedAt: new Date(report.generatedAt), status: report.partial ? 'PARTIAL' : 'COMPLETE', scanType: scanType(report), configFingerprint: fingerprint, rulesetVersion: RULESET_VERSION, configJson: json(persistedConfig(report)), outputDirectory, reportJsonPath: resolve(outputDirectory, 'report.json'), pageCount: report.summary.indexablePagesAnalyzed, fetchedCount: report.summary.pagesFetched, sitemapUrlCount: report.summary.sitemapPageUrls, criticalCount: countSeverity(report, 'critical'), warningCount: countSeverity(report, 'warning'), infoCount: countSeverity(report, 'info'), orphanPageCount: report.summary.orphanPages ?? 0, averageClickDepth: report.summary.averageClickDepth ?? null, staleContentCount: report.pages.filter(page => (page.contentAgeDays ?? 0) > 730).length, nearDuplicateGroups: report.summary.nearDuplicateGroups ?? 0, headingViolations: report.summary.headingHierarchyViolations ?? 0, mixedContentPages: report.summary.mixedContentPages ?? 0, canonicalSelfRate: report.summary.canonicalSelfReferencePercent ?? null, canonicalChains: report.summary.canonicalChains ?? 0, canonicalNon200: report.summary.canonicalNon200Targets ?? 0, crawlWasteUrls: (report.summary.blockedInternallyLinkedPages ?? 0) + (report.summary.parameterDuplicateUrls ?? 0), schemaCoverage: report.summary.schemaCoveragePercent ?? null, indexableRate: report.summary.crawlableIndexableRate ?? null, gscAveragePosition: report.importedData.gscAveragePosition ?? null, ...traffic, gscPeriodStart: date(report.importedData.gscDateRange?.start), gscPeriodEnd: date(report.importedData.gscDateRange?.end), ga4PeriodStart: date(report.importedData.ga4DateRange?.start), ga4PeriodEnd: date(report.importedData.ga4DateRange?.end), averageLcp: averageMetric(report, 'lcp'), averageCls: averageMetric(report, 'cls'), averageInp: averageMetric(report, 'inp', true), averageTbt: averageMetric(report, 'tbt'), previousRunId: previous?.id, comparisonStatus: comparable.status, comparisonNotes: comparable.notes,
       findings: { create: currentFindings.map(item => ({ ...item, evidenceJson: item.evidenceJson ? json(item.evidenceJson) : undefined })) },
-      pageMetrics: { create: report.pages.map(page => { const gsc = perPageTraffic.get(normalizePageUrl(page.url)); return { normalizedPageUrl: normalizePageUrl(page.url), pageType: page.pageType, status: page.status, indexable: page.indexable, incomingInternalLinks: page.incomingInternalLinks, clickDepth: page.clickDepth ?? null, orphan: Boolean(page.orphan), schemaEligible: true, schemaAppropriate: schemaAppropriate(page), contentAgeDays: page.contentAgeDays ?? null, gscClicks: gsc?.clicks ?? null, gscImpressions: gsc?.impressions ?? null, gscCtr: gsc?.impressions ? gsc.clicks / gsc.impressions : null, gscPosition: gsc?.impressions ? gsc.weightedPosition / gsc.impressions : null, ga4Sessions: page.analytics?.sessions ?? null, ga4Users: page.analytics?.activeUsers ?? null, ga4EngagementRate: page.analytics?.engagementRate ?? null, ga4BounceRate: page.analytics?.bounceRate ?? null, lcp: page.pageSpeed[0]?.metrics.lcp ?? null, cls: page.pageSpeed[0]?.metrics.cls ?? null, inp: page.pageSpeed[0]?.fieldMetrics?.inp?.percentile ?? null, tbt: page.pageSpeed[0]?.metrics.tbt ?? null }; }) },
+      pageMetrics: { create: uniqueHistoryPages(report.pages).map(page => { const gsc = perPageTraffic.get(normalizePageUrl(page.url)); return { normalizedPageUrl: normalizePageUrl(page.url), pageType: page.pageType, status: page.status, indexable: page.indexable, incomingInternalLinks: page.incomingInternalLinks, clickDepth: page.clickDepth ?? null, orphan: Boolean(page.orphan), schemaEligible: true, schemaAppropriate: schemaAppropriate(page), contentAgeDays: page.contentAgeDays ?? null, gscClicks: gsc?.clicks ?? null, gscImpressions: gsc?.impressions ?? null, gscCtr: gsc?.impressions ? gsc.clicks / gsc.impressions : null, gscPosition: gsc?.impressions ? gsc.weightedPosition / gsc.impressions : null, ga4Sessions: page.analytics?.sessions ?? null, ga4Users: page.analytics?.activeUsers ?? null, ga4EngagementRate: page.analytics?.engagementRate ?? null, ga4BounceRate: page.analytics?.bounceRate ?? null, lcp: page.pageSpeed[0]?.metrics.lcp ?? null, cls: page.pageSpeed[0]?.metrics.cls ?? null, inp: page.pageSpeed[0]?.fieldMetrics?.inp?.percentile ?? null, tbt: page.pageSpeed[0]?.metrics.tbt ?? null }; }) },
       deltas: previous ? { create: deltas.map(item => ({ ...item, previousRunId: previous.id })) } : undefined
     } });
   });

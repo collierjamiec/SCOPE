@@ -148,7 +148,7 @@ Optional URL Inspection enrichment adds Google’s indexed status, fetch/indexin
 
 Path controls are separate by design: crawl exclusions remove matching paths from every module, while PageSpeed-only exclusions preserve those pages everywhere else and skip only Google PageSpeed requests.
 
-Historical persistence is failure-isolated from report delivery. Duplicate page/rule fingerprints are deduplicated before the MariaDB transaction; any remaining database failure produces a diagnostic warning while the completed dashboard, JSON, CSV, and DOCX outputs remain available.
+Historical persistence is failure-isolated from report delivery. Duplicate page/rule fingerprints and normalized page variants are deduplicated before the MariaDB transaction; when variants such as HTTP/HTTPS, www/non-www, trailing slashes, or tracking parameters collapse to one historical identity, SCOPE retains the strongest canonical/indexable representative for the time-series metric while leaving the complete crawl evidence in the report. Any remaining database failure produces a diagnostic warning while the completed dashboard, JSON, CSV, and DOCX outputs remain available.
 
 The Schema dashboard inventories JSON-LD, Microdata, and RDFa and includes per-page, URL-prefilled links to the official Schema.org Markup Validator and Google Rich Results Test. SCOPE distinguishes parseable JSON from local structural/completeness checks, does not overrule Schema.org on extension-type names or optional properties such as `Organization.url`, and identifies malformed blocks by a best-effort, explicitly unvalidated likely `@type` when recoverable. It explicitly separates local screening from authoritative Schema.org validation and Google-specific rich-result eligibility.
 
